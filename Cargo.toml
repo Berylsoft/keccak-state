@@ -1,0 +1,21 @@
+[package]
+edition = "2018"
+description = "An implementation of Keccak derived functions."
+license = "CC0-1.0"
+name = "tiny-keccak-core"
+version = "2.0.2"
+authors = ["debris <marek.kotewicz@gmail.com>"]
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+crunchy = "0.2.2"
+
+[profile.dev]
+opt-level = 3  # Controls the --opt-level the compiler builds with
+debug = false   # Controls whether the compiler passes `-g`
+
+[profile.test]
+opt-level = 3  # Controls the --opt-level the compiler builds with
+debug = false   # Controls whether the compiler passes `-g`
