@@ -1,43 +1,3 @@
-//! Keccak derived functions specified in [`FIPS-202`], [`SP800-185`] and [`KangarooTwelve`].
-//!
-//! # Example
-//!
-//! ```
-//! # use tiny_keccak::Hasher;
-//! #
-//! # fn foo<H: Hasher>(mut hasher: H) {
-//! let input_a = b"hello world";
-//! let input_b = b"!";
-//! let mut output = [0u8; 32];
-//! hasher.update(input_a);
-//! hasher.update(input_b);
-//! hasher.finalize(&mut output);
-//! # }
-//! ```
-//!
-//! # Credits
-//!
-//! - [`coruus/keccak-tiny`] for C implementation of keccak function
-//! - [`@quininer`] for `no-std` support and rust implementation [`SP800-185`]
-//! - [`mimoo/GoKangarooTwelve`] for GO implementation of `KangarooTwelve`
-//! - [`@Vurich`] for optimizations
-//! - [`@oleganza`] for adding support for half-duplex use
-//!
-//! # License
-//!
-//! [`CC0`]. Attribution kindly requested. Blame taken too,
-//! but not liability.
-//!
-//! [`FIPS-202`]: https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.202.pdf
-//! [`SP800-185`]: https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-185.pdf
-//! [`KangarooTwelve`]: https://eprint.iacr.org/2016/770.pdf
-//! [`coruus/keccak-tiny`]: https://github.com/coruus/keccak-tiny
-//! [`mimoo/GoKangarooTwelve`]: https://github.com/mimoo/GoKangarooTwelve
-//! [`@quininer`]: https://github.com/quininer
-//! [`@Vurich`]: https://github.com/Vurich
-//! [`@oleganza`]: https://github.com/oleganza
-//! [`CC0`]: https://github.com/debris/tiny-keccak/blob/master/LICENSE
-
 #![no_std]
 
 const RHO: [u32; 24] = [
@@ -120,18 +80,18 @@ macro_rules! keccak_function {
     }
 }
 
-struct EncodedLen {
+pub struct EncodedLen {
     offset: usize,
     buffer: [u8; 9],
 }
 
 impl EncodedLen {
-    fn value(&self) -> &[u8] {
+    pub fn value(&self) -> &[u8] {
         &self.buffer[self.offset..]
     }
 }
 
-fn left_encode(len: usize) -> EncodedLen {
+pub fn left_encode(len: usize) -> EncodedLen {
     let mut buffer = [0u8; 9];
     buffer[1..].copy_from_slice(&(len as u64).to_be_bytes());
     let offset = buffer.iter().position(|i| *i != 0).unwrap_or(8);
@@ -143,7 +103,7 @@ fn left_encode(len: usize) -> EncodedLen {
     }
 }
 
-fn right_encode(len: usize) -> EncodedLen {
+pub fn right_encode(len: usize) -> EncodedLen {
     let mut buffer = [0u8; 9];
     buffer[..8].copy_from_slice(&(len as u64).to_be_bytes());
     let offset = buffer.iter().position(|i| *i != 0).unwrap_or(7);
@@ -152,7 +112,7 @@ fn right_encode(len: usize) -> EncodedLen {
 }
 
 #[derive(Default, Clone)]
-struct Buffer([u64; WORDS]);
+pub struct Buffer([u64; WORDS]);
 
 impl Buffer {
     fn words(&mut self) -> &mut [u64; WORDS] {
@@ -209,7 +169,7 @@ impl Buffer {
     }
 }
 
-trait Permutation {
+pub trait Permutation {
     fn execute(a: &mut Buffer);
 }
 
@@ -217,7 +177,7 @@ pub mod keccakf {
     use crate::{Buffer, Permutation};
 
     const ROUNDS: usize = 24;
-    
+
     const RC: [u64; ROUNDS] = [
         1u64,
         0x8082u64,
@@ -244,11 +204,11 @@ pub mod keccakf {
         0x80000001u64,
         0x8000000080008008u64,
     ];
-    
+
     keccak_function!("`keccak-f[1600, 24]`", keccakf, ROUNDS, RC);
-    
+
     pub struct KeccakF;
-    
+
     impl Permutation for KeccakF {
         fn execute(buffer: &mut Buffer) {
             keccakf(buffer.words());
@@ -260,7 +220,7 @@ pub mod keccakp {
     use crate::{Buffer, Permutation};
 
     const ROUNDS: usize = 12;
-    
+
     const RC: [u64; ROUNDS] = [
         0x000000008000808b,
         0x800000000000008b,
@@ -275,16 +235,16 @@ pub mod keccakp {
         0x0000000080000001,
         0x8000000080008008,
     ];
-    
+
     keccak_function!("`keccak-p[1600, 12]`", keccakp, ROUNDS, RC);
-    
+
     pub struct KeccakP;
-    
+
     impl Permutation for KeccakP {
         fn execute(buffer: &mut Buffer) {
             keccakp(buffer.words());
         }
-    }    
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -293,7 +253,7 @@ enum Mode {
     Squeezing,
 }
 
-struct KeccakState<P> {
+pub struct KeccakState<P> {
     buffer: Buffer,
     offset: usize,
     rate: usize,
@@ -316,7 +276,7 @@ impl<P> Clone for KeccakState<P> {
 }
 
 impl<P: Permutation> KeccakState<P> {
-    fn new(rate: usize, delim: u8) -> Self {
+    pub fn new(rate: usize, delim: u8) -> Self {
         assert!(rate != 0, "rate cannot be equal 0");
         KeccakState {
             buffer: Buffer::default(),
@@ -332,13 +292,13 @@ impl<P: Permutation> KeccakState<P> {
         P::execute(&mut self.buffer);
     }
 
-    fn update(&mut self, input: &[u8]) {
+    pub fn update(&mut self, input: &[u8]) {
         if let Mode::Squeezing = self.mode {
             self.mode = Mode::Absorbing;
             self.fill_block();
         }
 
-        //first foldp
+        // first foldp
         let mut ip = 0;
         let mut l = input.len();
         let mut rate = self.rate - self.offset;
@@ -360,7 +320,7 @@ impl<P: Permutation> KeccakState<P> {
         self.buffer.pad(self.offset, self.delim, self.rate);
     }
 
-    fn squeeze(&mut self, output: &mut [u8]) {
+    pub fn squeeze(&mut self, output: &mut [u8]) {
         if let Mode::Absorbing = self.mode {
             self.mode = Mode::Squeezing;
             self.pad();
@@ -385,23 +345,23 @@ impl<P: Permutation> KeccakState<P> {
         self.offset = offset + l;
     }
 
-    fn finalize(mut self, output: &mut [u8]) {
+    pub fn finalize(mut self, output: &mut [u8]) {
         self.squeeze(output);
     }
 
-    fn fill_block(&mut self) {
+    pub fn fill_block(&mut self) {
         self.keccak();
         self.offset = 0;
     }
 
-    fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.buffer = Buffer::default();
         self.offset = 0;
         self.mode = Mode::Absorbing;
     }
 }
 
-fn bits_to_rate(bits: usize) -> usize {
+pub fn bits_to_rate(bits: usize) -> usize {
     200 - bits / 4
 }
 
