@@ -1,16 +1,24 @@
 [package]
-edition = "2021"
-description = "Core part of `tiny-keccak` as public API"
-license = "CC0-1.0"
 name = "tiny-keccak-core"
-version = "2.0.2"
+version = "2.0.2" # tiny-keccak@f0fa146
+edition = "2021"
 authors = ["debris <marek.kotewicz@gmail.com>", "stackinspector"]
+license = "CC0-1.0"
+repository = "https://github.com/Berylsoft/tiny-keccak-core"
+description = "Core part of `tiny-keccak` as public API"
 
 [lib]
 path = "lib.rs"
 
 [dependencies]
 crunchy = "0.2.2"
+
+[[example]]
+name = "cshake"
+
+[dev-dependencies]
+tiny-keccak = { version = "2", features = ["cshake"] }
+getrandom = "0.2"
 
 [profile.dev]
 opt-level = 3  # Controls the --opt-level the compiler builds with
@@ -19,10 +27,3 @@ debug = false   # Controls whether the compiler passes `-g`
 [profile.test]
 opt-level = 3  # Controls the --opt-level the compiler builds with
 debug = false   # Controls whether the compiler passes `-g`
-
-[[example]]
-name = "cshake"
-
-[dev-dependencies]
-tiny-keccak = { version = "2", features = ["cshake"] }
-getrandom = "0.2"
