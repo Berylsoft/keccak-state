@@ -12,6 +12,11 @@ path = "lib.rs"
 
 [dependencies]
 crunchy = "0.2.2"
+zeroize = { version = "1", optional = true }
+
+[features]
+default = []
+zeroize-on-drop = ["zeroize"]
 
 [[example]]
 name = "cshake"

@@ -169,6 +169,14 @@ impl Buffer {
     }
 }
 
+#[cfg(feature = "zeroize-on-drop")]
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.0.zeroize()
+    }
+}
+
 pub trait Permutation {
     fn execute(a: &mut Buffer);
 }
