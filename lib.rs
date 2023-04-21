@@ -300,7 +300,7 @@ impl<P: Permutation> KeccakState<P> {
         P::execute(&mut self.buffer);
     }
 
-    pub fn update(&mut self, input: &[u8]) {
+    pub fn absorb(&mut self, input: &[u8]) {
         if let Mode::Squeezing = self.mode {
             self.mode = Mode::Absorbing;
             self.fill_block();
@@ -353,17 +353,21 @@ impl<P: Permutation> KeccakState<P> {
         self.offset = offset + l;
     }
 
-    pub fn finalize(mut self, output: &mut [u8]) {
-        self.squeeze(output);
-    }
-
     pub fn fill_block(&mut self) {
         self.keccak();
         self.offset = 0;
     }
 
     pub fn reset(&mut self) {
-        self.buffer = Buffer::default();
+        #[cfg(feature = "zeroize-on-drop")]
+        {
+            use zeroize::Zeroize;
+            self.buffer.0.zeroize();
+        }
+        #[cfg(not(feature = "zeroize-on-drop"))]
+        {
+            self.buffer = Buffer::default();
+        }
         self.offset = 0;
         self.mode = Mode::Absorbing;
     }

@@ -9,11 +9,11 @@ fn cshake256_init(name: &[u8], custom_string: &[u8]) -> KeccakState<KeccakF> {
         KeccakState::new(rate, 0x1f)
     } else {
         let mut state = KeccakState::new(rate, 0x04);
-        state.update(left_encode(rate).value());
-        state.update(left_encode(name.len() * 8).value());
-        state.update(name);
-        state.update(left_encode(custom_string.len() * 8).value());
-        state.update(custom_string);
+        state.absorb(left_encode(rate).value());
+        state.absorb(left_encode(name.len() * 8).value());
+        state.absorb(name);
+        state.absorb(left_encode(custom_string.len() * 8).value());
+        state.absorb(custom_string);
         state.fill_block();
         state
     }
@@ -34,7 +34,7 @@ fn main() {
 
     let b = {
         let mut ctx = cshake256_init(b"name", b"custom_string");
-        ctx.update(&ibuf);
+        ctx.absorb(&ibuf);
         let mut obuf = [0; 4096];
         ctx.squeeze(&mut obuf);
         obuf
