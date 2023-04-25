@@ -181,7 +181,7 @@ pub trait Permutation {
     fn execute(a: &mut Buffer);
 }
 
-pub mod keccakf {
+mod keccakf {
     use crate::{Buffer, Permutation};
 
     const ROUNDS: usize = 24;
@@ -224,7 +224,9 @@ pub mod keccakf {
     }
 }
 
-pub mod keccakp {
+pub use keccakf::{keccakf, KeccakF};
+
+mod keccakp {
     use crate::{Buffer, Permutation};
 
     const ROUNDS: usize = 12;
@@ -254,6 +256,8 @@ pub mod keccakp {
         }
     }
 }
+
+pub use keccakp::{keccakp, KeccakP};
 
 #[derive(Clone, Copy)]
 enum Mode {
@@ -373,9 +377,14 @@ impl<P: Permutation> KeccakState<P> {
     }
 }
 
-pub fn bits_to_rate(bits: usize) -> usize {
+pub const fn bits_to_rate(bits: usize) -> usize {
     200 - bits / 4
 }
+
+pub const DELIM_KECCAK : u8 = 0x01;
+pub const DELIM_SHA3   : u8 = 0x06;
+pub const DELIM_SHAKE  : u8 = 0x1f;
+pub const DELIM_CSHAKE : u8 = 0x04;
 
 #[cfg(test)]
 mod tests {

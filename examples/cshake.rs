@@ -1,14 +1,14 @@
-use tiny_keccak_core::{KeccakState, keccakf::KeccakF};
+use tiny_keccak_core::{KeccakState, KeccakF};
 
 fn cshake256_init(name: &[u8], custom_string: &[u8]) -> KeccakState<KeccakF> {
-    use tiny_keccak_core::{bits_to_rate, left_encode};
+    use tiny_keccak_core::{bits_to_rate, left_encode, DELIM_CSHAKE, DELIM_SHAKE};
     let rate = bits_to_rate(256);
     // if there is no name and no customization string
     // cSHAKE is SHAKE
     if name.is_empty() && custom_string.is_empty() {
-        KeccakState::new(rate, 0x1f)
+        KeccakState::new(rate, DELIM_SHAKE)
     } else {
-        let mut state = KeccakState::new(rate, 0x04);
+        let mut state = KeccakState::new(rate, DELIM_CSHAKE);
         state.absorb(left_encode(rate).value());
         state.absorb(left_encode(name.len() * 8).value());
         state.absorb(name);
