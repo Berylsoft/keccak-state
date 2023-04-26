@@ -13,7 +13,7 @@ const PI: [usize; 24] = [
 const WORDS: usize = 25;
 
 macro_rules! keccak_impl {
-    ($doc: expr, $name: ident, $struct_name: ident, $rounds: expr, $rc: expr) => {
+    ($doc:expr, $name:ident, $struct_name:ident, $rounds:expr, $rc:expr) => {
         #[doc = $doc]
         #[allow(unused_assignments)]
         #[allow(non_upper_case_globals)]
@@ -126,13 +126,14 @@ pub fn right_encode(len: usize) -> EncodedLen {
 pub struct Buffer([u64; WORDS]);
 
 impl Buffer {
+    #[inline]
     fn words(&mut self) -> &mut [u64; WORDS] {
         &mut self.0
     }
 
     #[inline]
     fn bytes(&mut self) -> &mut [u8; WORDS * 8] {
-        unsafe { core::mem::transmute(&mut self.0) }
+        unsafe { core::mem::transmute(self.words()) }
     }
 
     #[cfg(target_endian = "little")]
