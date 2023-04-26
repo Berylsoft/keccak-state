@@ -119,11 +119,15 @@ impl Buffer {
         &mut self.0
     }
 
+    #[inline]
+    fn bytes(&mut self) -> &mut [u8; WORDS * 8] {
+        unsafe { core::mem::transmute(&mut self.0) }
+    }
+
     #[cfg(target_endian = "little")]
     #[inline]
     fn execute<F: FnOnce(&mut [u8])>(&mut self, offset: usize, len: usize, f: F) {
-        let buffer: &mut [u8; WORDS * 8] = unsafe { core::mem::transmute(&mut self.0) };
-        f(&mut buffer[offset..][..len]);
+        f(&mut self.bytes()[offset..][..len]);
     }
 
     #[cfg(target_endian = "big")]
@@ -138,8 +142,7 @@ impl Buffer {
         let start = offset / 8;
         let end = (offset + len + 7) / 8;
         swap_endianess(&mut self.0[start..end]);
-        let buffer: &mut [u8; WORDS * 8] = unsafe { core::mem::transmute(&mut self.0) };
-        f(&mut buffer[offset..][..len]);
+        f(&mut self.bytes()[offset..][..len]);
         swap_endianess(&mut self.0[start..end]);
     }
 
@@ -150,15 +153,8 @@ impl Buffer {
     fn xorin(&mut self, src: &[u8], offset: usize, len: usize) {
         self.execute(offset, len, |dst| {
             assert!(dst.len() <= src.len());
-            let len = dst.len();
-            let mut dst_ptr = dst.as_mut_ptr();
-            let mut src_ptr = src.as_ptr();
-            for _ in 0..len {
-                unsafe {
-                    *dst_ptr ^= *src_ptr;
-                    src_ptr = src_ptr.offset(1);
-                    dst_ptr = dst_ptr.offset(1);
-                }
+            for i in 0..dst.len() {
+                dst[i] ^= src[i];
             }
         });
     }
