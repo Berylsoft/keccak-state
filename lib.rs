@@ -1,5 +1,7 @@
 #![no_std]
 
+use crunchy::unroll;
+
 const RHO: [u32; 24] = [
     1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44,
 ];
@@ -12,87 +14,80 @@ const WORDS: usize = 25;
 
 macro_rules! keccak_impl {
     ($doc: expr, $name: ident, $struct_name: ident, $rounds: expr, $rc: expr) => {
-        mod $name {
-            use crunchy::unroll;
-            use crate::{RHO, PI, WORDS, Buffer, Permutation};
-
+        #[doc = $doc]
+        #[allow(unused_assignments)]
+        #[allow(non_upper_case_globals)]
+        pub fn $name(a: &mut [u64; WORDS]) {
             const ROUNDS: usize = $rounds;
             const RC: [u64; ROUNDS] = $rc;
 
-            #[doc = $doc]
-            #[allow(unused_assignments)]
-            #[allow(non_upper_case_globals)]
-            pub fn $name(a: &mut [u64; WORDS]) {
-                for i in 0..ROUNDS {
-                    let mut array: [u64; 5] = [0; 5];
+            for i in 0..ROUNDS {
+                let mut array: [u64; 5] = [0; 5];
 
-                    // Theta
-                    unroll! {
-                        for x in 0..5 {
-                            unroll! {
-                                for y_count in 0..5 {
-                                    let y = y_count * 5;
-                                    array[x] ^= a[x + y];
-                                }
+                // Theta
+                unroll! {
+                    for x in 0..5 {
+                        unroll! {
+                            for y_count in 0..5 {
+                                let y = y_count * 5;
+                                array[x] ^= a[x + y];
                             }
                         }
                     }
-
-                    unroll! {
-                        for x in 0..5 {
-                            unroll! {
-                                for y_count in 0..5 {
-                                    let y = y_count * 5;
-                                    a[y + x] ^= array[(x + 4) % 5] ^ array[(x + 1) % 5].rotate_left(1);
-                                }
-                            }
-                        }
-                    }
-
-                    // Rho and pi
-                    let mut last = a[1];
-                    unroll! {
-                        for x in 0..24 {
-                            array[0] = a[PI[x]];
-                            a[PI[x]] = last.rotate_left(RHO[x]);
-                            last = array[0];
-                        }
-                    }
-
-                    // Chi
-                    unroll! {
-                        for y_step in 0..5 {
-                            let y = y_step * 5;
-
-                            unroll! {
-                                for x in 0..5 {
-                                    array[x] = a[y + x];
-                                }
-                            }
-
-                            unroll! {
-                                for x in 0..5 {
-                                    a[y + x] = array[x] ^ ((!array[(x + 1) % 5]) & (array[(x + 2) % 5]));
-                                }
-                            }
-                        }
-                    };
-
-                    // Iota
-                    a[0] ^= RC[i];
                 }
-            }
 
-            pub struct $struct_name;
-
-            impl Permutation for $struct_name {
-                fn execute(buffer: &mut Buffer) {
-                    $name(buffer.words());
+                unroll! {
+                    for x in 0..5 {
+                        unroll! {
+                            for y_count in 0..5 {
+                                let y = y_count * 5;
+                                a[y + x] ^= array[(x + 4) % 5] ^ array[(x + 1) % 5].rotate_left(1);
+                            }
+                        }
+                    }
                 }
+
+                // Rho and pi
+                let mut last = a[1];
+                unroll! {
+                    for x in 0..24 {
+                        array[0] = a[PI[x]];
+                        a[PI[x]] = last.rotate_left(RHO[x]);
+                        last = array[0];
+                    }
+                }
+
+                // Chi
+                unroll! {
+                    for y_step in 0..5 {
+                        let y = y_step * 5;
+
+                        unroll! {
+                            for x in 0..5 {
+                                array[x] = a[y + x];
+                            }
+                        }
+
+                        unroll! {
+                            for x in 0..5 {
+                                a[y + x] = array[x] ^ ((!array[(x + 1) % 5]) & (array[(x + 2) % 5]));
+                            }
+                        }
+                    }
+                };
+
+                // Iota
+                a[0] ^= RC[i];
             }
         }
 
-        pub use $name::{$name, $struct_name};
+        pub struct $struct_name;
+
+        impl Permutation for $struct_name {
+            fn execute(buffer: &mut Buffer) {
+                $name(buffer.words());
+            }
+        }
     }
 }
 
