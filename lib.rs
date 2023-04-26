@@ -16,7 +16,6 @@ macro_rules! keccak_impl {
     ($doc:expr, $name:ident, $struct_name:ident, $rounds:expr, $rc:expr) => {
         #[doc = $doc]
         #[allow(unused_assignments)]
-        #[allow(non_upper_case_globals)]
         pub fn $name(a: &mut [u64; WORDS]) {
             const ROUNDS: usize = $rounds;
             const RC: [u64; ROUNDS] = $rc;
