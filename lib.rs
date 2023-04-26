@@ -10,73 +10,89 @@ const PI: [usize; 24] = [
 
 const WORDS: usize = 25;
 
-macro_rules! keccak_function {
-    ($doc: expr, $name: ident, $rounds: expr, $rc: expr) => {
-        #[doc = $doc]
-        #[allow(unused_assignments)]
-        #[allow(non_upper_case_globals)]
-        pub fn $name(a: &mut [u64; $crate::WORDS]) {
+macro_rules! keccak_impl {
+    ($doc: expr, $name: ident, $struct_name: ident, $rounds: expr, $rc: expr) => {
+        mod $name {
             use crunchy::unroll;
+            use crate::{RHO, PI, WORDS, Buffer, Permutation};
 
-            for i in 0..$rounds {
-                let mut array: [u64; 5] = [0; 5];
+            const ROUNDS: usize = $rounds;
+            const RC: [u64; ROUNDS] = $rc;
 
-                // Theta
-                unroll! {
-                    for x in 0..5 {
-                        unroll! {
-                            for y_count in 0..5 {
-                                let y = y_count * 5;
-                                array[x] ^= a[x + y];
+            #[doc = $doc]
+            #[allow(unused_assignments)]
+            #[allow(non_upper_case_globals)]
+            pub fn $name(a: &mut [u64; WORDS]) {
+                for i in 0..ROUNDS {
+                    let mut array: [u64; 5] = [0; 5];
+
+                    // Theta
+                    unroll! {
+                        for x in 0..5 {
+                            unroll! {
+                                for y_count in 0..5 {
+                                    let y = y_count * 5;
+                                    array[x] ^= a[x + y];
+                                }
                             }
                         }
                     }
+
+                    unroll! {
+                        for x in 0..5 {
+                            unroll! {
+                                for y_count in 0..5 {
+                                    let y = y_count * 5;
+                                    a[y + x] ^= array[(x + 4) % 5] ^ array[(x + 1) % 5].rotate_left(1);
+                                }
+                            }
+                        }
+                    }
+
+                    // Rho and pi
+                    let mut last = a[1];
+                    unroll! {
+                        for x in 0..24 {
+                            array[0] = a[PI[x]];
+                            a[PI[x]] = last.rotate_left(RHO[x]);
+                            last = array[0];
+                        }
+                    }
+
+                    // Chi
+                    unroll! {
+                        for y_step in 0..5 {
+                            let y = y_step * 5;
+
+                            unroll! {
+                                for x in 0..5 {
+                                    array[x] = a[y + x];
+                                }
+                            }
+
+                            unroll! {
+                                for x in 0..5 {
+                                    a[y + x] = array[x] ^ ((!array[(x + 1) % 5]) & (array[(x + 2) % 5]));
+                                }
+                            }
+                        }
+                    };
+
+                    // Iota
+                    a[0] ^= RC[i];
                 }
+            }
 
-                unroll! {
-                    for x in 0..5 {
-                        unroll! {
-                            for y_count in 0..5 {
-                                let y = y_count * 5;
-                                a[y + x] ^= array[(x + 4) % 5] ^ array[(x + 1) % 5].rotate_left(1);
-                            }
-                        }
-                    }
+            pub struct $struct_name;
+
+            impl Permutation for $struct_name {
+                fn execute(buffer: &mut Buffer) {
+                    $name(buffer.words());
                 }
-
-                // Rho and pi
-                let mut last = a[1];
-                unroll! {
-                    for x in 0..24 {
-                        array[0] = a[$crate::PI[x]];
-                        a[$crate::PI[x]] = last.rotate_left($crate::RHO[x]);
-                        last = array[0];
-                    }
-                }
-
-                // Chi
-                unroll! {
-                    for y_step in 0..5 {
-                        let y = y_step * 5;
-
-                        unroll! {
-                            for x in 0..5 {
-                                array[x] = a[y + x];
-                            }
-                        }
-
-                        unroll! {
-                            for x in 0..5 {
-                                a[y + x] = array[x] ^ ((!array[(x + 1) % 5]) & (array[(x + 2) % 5]));
-                            }
-                        }
-                    }
-                };
-
-                // Iota
-                a[0] ^= $rc[i];
             }
         }
+
+        pub use $name::{$name, $struct_name};
     }
 }
 
@@ -177,83 +193,47 @@ pub trait Permutation {
     fn execute(a: &mut Buffer);
 }
 
-mod keccakf {
-    use crate::{Buffer, Permutation};
+keccak_impl!("`keccak-f[1600, 24]`", keccakf, KeccakF, 24, [
+    1,
+    0x8082,
+    0x800000000000808a,
+    0x8000000080008000,
+    0x808b,
+    0x80000001,
+    0x8000000080008081,
+    0x8000000000008009,
+    0x8a,
+    0x88,
+    0x80008009,
+    0x8000000a,
+    0x8000808b,
+    0x800000000000008b,
+    0x8000000000008089,
+    0x8000000000008003,
+    0x8000000000008002,
+    0x8000000000000080,
+    0x800a,
+    0x800000008000000a,
+    0x8000000080008081,
+    0x8000000000008080,
+    0x80000001,
+    0x8000000080008008,
+]);
 
-    const ROUNDS: usize = 24;
-
-    const RC: [u64; ROUNDS] = [
-        1u64,
-        0x8082u64,
-        0x800000000000808au64,
-        0x8000000080008000u64,
-        0x808bu64,
-        0x80000001u64,
-        0x8000000080008081u64,
-        0x8000000000008009u64,
-        0x8au64,
-        0x88u64,
-        0x80008009u64,
-        0x8000000au64,
-        0x8000808bu64,
-        0x800000000000008bu64,
-        0x8000000000008089u64,
-        0x8000000000008003u64,
-        0x8000000000008002u64,
-        0x8000000000000080u64,
-        0x800au64,
-        0x800000008000000au64,
-        0x8000000080008081u64,
-        0x8000000000008080u64,
-        0x80000001u64,
-        0x8000000080008008u64,
-    ];
-
-    keccak_function!("`keccak-f[1600, 24]`", keccakf, ROUNDS, RC);
-
-    pub struct KeccakF;
-
-    impl Permutation for KeccakF {
-        fn execute(buffer: &mut Buffer) {
-            keccakf(buffer.words());
-        }
-    }
-}
-
-pub use keccakf::{keccakf, KeccakF};
-
-mod keccakp {
-    use crate::{Buffer, Permutation};
-
-    const ROUNDS: usize = 12;
-
-    const RC: [u64; ROUNDS] = [
-        0x000000008000808b,
-        0x800000000000008b,
-        0x8000000000008089,
-        0x8000000000008003,
-        0x8000000000008002,
-        0x8000000000000080,
-        0x000000000000800a,
-        0x800000008000000a,
-        0x8000000080008081,
-        0x8000000000008080,
-        0x0000000080000001,
-        0x8000000080008008,
-    ];
-
-    keccak_function!("`keccak-p[1600, 12]`", keccakp, ROUNDS, RC);
-
-    pub struct KeccakP;
-
-    impl Permutation for KeccakP {
-        fn execute(buffer: &mut Buffer) {
-            keccakp(buffer.words());
-        }
-    }
-}
-
-pub use keccakp::{keccakp, KeccakP};
+keccak_impl!("`keccak-p[1600, 12]`", keccakp, KeccakP, 12, [
+    0x000000008000808b,
+    0x800000000000008b,
+    0x8000000000008089,
+    0x8000000000008003,
+    0x8000000000008002,
+    0x8000000000000080,
+    0x000000000000800a,
+    0x800000008000000a,
+    0x8000000080008081,
+    0x8000000000008080,
+    0x0000000080000001,
+    0x8000000080008008,
+]);
 
 #[derive(Clone, Copy)]
 enum Mode {
