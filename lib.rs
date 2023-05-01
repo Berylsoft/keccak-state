@@ -1,7 +1,5 @@
 #![no_std]
 
-use crunchy::unroll;
-
 const RHO: [u32; 24] = [
     1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44,
 ];
@@ -58,6 +56,8 @@ const KECCAK_P_RC: [u64; 12] = [
 #[inline]
 fn keccak<const ROUNDS: usize>(a: &mut [u64; WORDS], RC: &'static [u64; ROUNDS]) {
     for i in 0..ROUNDS {
+        use crunchy::unroll;
+
         let mut array: [u64; 5] = [0; 5];
 
         // Theta
@@ -114,6 +114,12 @@ fn keccak<const ROUNDS: usize>(a: &mut [u64; WORDS], RC: &'static [u64; ROUNDS])
 
         // Iota
         a[0] ^= RC[i];
+
+        #[cfg(feature = "zeroize-on-drop")]
+        {
+            use zeroize::Zeroize;
+            array.zeroize()    
+        }
     }
 }
 
