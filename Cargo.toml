@@ -16,12 +16,15 @@ zeroize = { version = "1", optional = true }
 
 [features]
 default = []
+encode-len = []
 zeroize-on-drop = ["zeroize"]
 
 [[example]]
 name = "cshake"
+required-features = ["encode-len"]
 
 [dev-dependencies]
+hex-literal = "0.4"
 tiny-keccak = { version = "2", features = ["cshake"] }
 getrandom = "0.2"
 

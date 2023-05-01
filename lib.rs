@@ -90,35 +90,45 @@ macro_rules! keccak_impl {
     }
 }
 
-pub struct EncodedLen {
-    offset: usize,
-    buffer: [u8; 9],
-}
-
-impl EncodedLen {
-    pub fn value(&self) -> &[u8] {
-        &self.buffer[self.offset..]
+#[cfg(feature = "encode-len")]
+pub mod encode_len {
+    pub struct EncodedLen {
+        offset: usize,
+        buffer: [u8; 9],
     }
-}
 
-pub fn left_encode(len: usize) -> EncodedLen {
-    let mut buffer = [0u8; 9];
-    buffer[1..].copy_from_slice(&(len as u64).to_be_bytes());
-    let offset = buffer.iter().position(|i| *i != 0).unwrap_or(8);
-    buffer[offset - 1] = 9 - offset as u8;
-
-    EncodedLen {
-        offset: offset - 1,
-        buffer,
+    impl EncodedLen {
+        pub fn value(&self) -> &[u8] {
+            &self.buffer[self.offset..]
+        }
     }
-}
 
-pub fn right_encode(len: usize) -> EncodedLen {
-    let mut buffer = [0u8; 9];
-    buffer[..8].copy_from_slice(&(len as u64).to_be_bytes());
-    let offset = buffer.iter().position(|i| *i != 0).unwrap_or(7);
-    buffer[8] = 8 - offset as u8;
-    EncodedLen { offset, buffer }
+    pub fn left_encode(len: usize) -> EncodedLen {
+        let len = len as u64;
+        let mut buffer = [0u8; 9];
+        buffer[1..].copy_from_slice(&len.to_be_bytes());
+        let offset = if len == 0 { 7 } else { (len.leading_zeros() / 8) as usize };
+        buffer[offset] = 8 - offset as u8;
+        EncodedLen { offset, buffer }
+    }
+
+    pub fn right_encode(len: usize) -> EncodedLen {
+        let len = len as u64;
+        let mut buffer = [0u8; 9];
+        buffer[..8].copy_from_slice(&len.to_be_bytes());
+        let offset = if len == 0 { 7 } else { (len.leading_zeros() / 8) as usize };
+        buffer[8] = 8 - offset as u8;
+        EncodedLen { offset, buffer }
+    }
+
+    pub fn k12_encode(len: usize) -> EncodedLen {
+        let len = len as u64;
+        let mut buffer = [0u8; 9];
+        buffer[..8].copy_from_slice(&len.to_be_bytes());
+        let offset = if len == 0 { 8 } else { (len.leading_zeros() / 8) as usize };
+        buffer[8] = 8 - offset as u8;
+        EncodedLen { offset, buffer }
+    }
 }
 
 #[derive(Default, Clone)]
@@ -216,17 +226,17 @@ keccak_impl!("`keccak-f[1600, 24]`", keccakf, KeccakF, 24, [
 ]);
 
 keccak_impl!("`keccak-p[1600, 12]`", keccakp, KeccakP, 12, [
-    0x000000008000808b,
+    0x8000808b,
     0x800000000000008b,
     0x8000000000008089,
     0x8000000000008003,
     0x8000000000008002,
     0x8000000000000080,
-    0x000000000000800a,
+    0x800a,
     0x800000008000000a,
     0x8000000080008081,
     0x8000000000008080,
-    0x0000000080000001,
+    0x80000001,
     0x8000000080008008,
 ]);
 
@@ -359,23 +369,41 @@ pub const DELIM_CSHAKE : u8 = 0x04;
 
 #[cfg(test)]
 mod tests {
-    use crate::{left_encode, right_encode};
-
+    #[cfg(feature = "encode-len")]
     #[test]
-    fn test_left_encode() {
-        assert_eq!(left_encode(0).value(), &[1, 0]);
-        assert_eq!(left_encode(128).value(), &[1, 128]);
-        assert_eq!(left_encode(65536).value(), &[3, 1, 0, 0]);
-        assert_eq!(left_encode(4096).value(), &[2, 16, 0]);
-        assert_eq!(left_encode(54321).value(), &[2, 212, 49]);
-    }
+    fn test_encode_len() {
+        macro_rules! test_encode_len {
+            ($($fn_name:ident {$($len:literal -> $encoded:literal)*})*) => {
+                $($(assert_eq!($fn_name($len).value(), hex_literal::hex!($encoded));)*)*
+            };
+        }
 
-    #[test]
-    fn test_right_encode() {
-        assert_eq!(right_encode(0).value(), &[0, 1]);
-        assert_eq!(right_encode(128).value(), &[128, 1]);
-        assert_eq!(right_encode(65536).value(), &[1, 0, 0, 3]);
-        assert_eq!(right_encode(4096).value(), &[16, 0, 2]);
-        assert_eq!(right_encode(54321).value(), &[212, 49, 2]);
+        use crate::encode_len::{left_encode, right_encode, k12_encode};
+
+        test_encode_len! {
+            left_encode {
+                0 -> "01 00"
+                0x80 -> "01 80"
+                0x10000 -> "03 010000"
+                0x1000 -> "02 1000"
+                0x4321 -> "02 4321"
+            }
+
+            right_encode {
+                0 -> "00 01"
+                0x80 -> "80 01"
+                0x10000 -> "010000 03"
+                0x1000 -> "1000 02"
+                0x4321 -> "4321 02"
+            }
+
+            k12_encode {
+                0 -> "00"
+                0x80 -> "80 01"
+                0x10000 -> "010000 03"
+                0x1000 -> "1000 02"
+                0x4321 -> "4321 02"
+            }
+        }
     }
 }
