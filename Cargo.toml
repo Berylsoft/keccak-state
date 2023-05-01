@@ -1,10 +1,10 @@
 [package]
-name = "tiny-keccak-core"
+name = "keccak-core"
 version = "2.0.2" # tiny-keccak@f0fa146
 edition = "2021"
 authors = ["debris <marek.kotewicz@gmail.com>", "stackinspector"]
 license = "CC0-1.0"
-repository = "https://github.com/Berylsoft/tiny-keccak-core"
+repository = "https://github.com/Berylsoft/keccak-core"
 description = "Core part of `tiny-keccak` as public API"
 
 [lib]
