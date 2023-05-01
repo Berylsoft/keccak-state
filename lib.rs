@@ -173,8 +173,15 @@ impl Buffer {
 
     fn xorin(&mut self, src: &[u8], offset: usize, len: usize) {
         self.execute(offset, len, |dst| {
-            assert!(dst.len() <= src.len());
-            for i in 0..dst.len() {
+            let len = dst.len();
+
+            // Check *before* looping that both are long enough,
+            // in a way that makes it directly obvious to LLVM
+            // that the indexing below will be in-bounds.
+            // ref: https://users.rust-lang.org/t/93119/10
+            let (dst, src) = (&mut dst[..len], &src[..len]);
+        
+            for i in 0..len {
                 dst[i] ^= src[i];
             }
         });
