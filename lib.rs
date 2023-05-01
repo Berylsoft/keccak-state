@@ -12,81 +12,108 @@ const PI: [usize; 24] = [
 
 const WORDS: usize = 25;
 
-macro_rules! keccak_impl {
-    ($doc:expr, $name:ident, $struct_name:ident, $rounds:expr, $rc:expr) => {
-        #[doc = $doc]
-        #[allow(unused_assignments)]
-        pub fn $name(a: &mut [u64; WORDS]) {
-            const ROUNDS: usize = $rounds;
-            const RC: [u64; ROUNDS] = $rc;
+const KECCAK_F_RC: [u64; 24] = [
+    1,
+    0x8082,
+    0x800000000000808a,
+    0x8000000080008000,
+    0x808b,
+    0x80000001,
+    0x8000000080008081,
+    0x8000000000008009,
+    0x8a,
+    0x88,
+    0x80008009,
+    0x8000000a,
+    0x8000808b,
+    0x800000000000008b,
+    0x8000000000008089,
+    0x8000000000008003,
+    0x8000000000008002,
+    0x8000000000000080,
+    0x800a,
+    0x800000008000000a,
+    0x8000000080008081,
+    0x8000000000008080,
+    0x80000001,
+    0x8000000080008008,
+];
 
-            for i in 0..ROUNDS {
-                let mut array: [u64; 5] = [0; 5];
+const KECCAK_P_RC: [u64; 12] = [
+    0x8000808b,
+    0x800000000000008b,
+    0x8000000000008089,
+    0x8000000000008003,
+    0x8000000000008002,
+    0x8000000000000080,
+    0x800a,
+    0x800000008000000a,
+    0x8000000080008081,
+    0x8000000000008080,
+    0x80000001,
+    0x8000000080008008,
+];
 
-                // Theta
+#[allow(unused_assignments, non_snake_case)]
+#[inline]
+fn keccak<const ROUNDS: usize>(a: &mut [u64; WORDS], RC: &'static [u64; ROUNDS]) {
+    for i in 0..ROUNDS {
+        let mut array: [u64; 5] = [0; 5];
+
+        // Theta
+        unroll! {
+            for x in 0..5 {
                 unroll! {
-                    for x in 0..5 {
-                        unroll! {
-                            for y_count in 0..5 {
-                                let y = y_count * 5;
-                                array[x] ^= a[x + y];
-                            }
-                        }
+                    for y_count in 0..5 {
+                        let y = y_count * 5;
+                        array[x] ^= a[x + y];
                     }
                 }
-
-                unroll! {
-                    for x in 0..5 {
-                        unroll! {
-                            for y_count in 0..5 {
-                                let y = y_count * 5;
-                                a[y + x] ^= array[(x + 4) % 5] ^ array[(x + 1) % 5].rotate_left(1);
-                            }
-                        }
-                    }
-                }
-
-                // Rho and pi
-                let mut last = a[1];
-                unroll! {
-                    for x in 0..24 {
-                        array[0] = a[PI[x]];
-                        a[PI[x]] = last.rotate_left(RHO[x]);
-                        last = array[0];
-                    }
-                }
-
-                // Chi
-                unroll! {
-                    for y_step in 0..5 {
-                        let y = y_step * 5;
-
-                        unroll! {
-                            for x in 0..5 {
-                                array[x] = a[y + x];
-                            }
-                        }
-
-                        unroll! {
-                            for x in 0..5 {
-                                a[y + x] = array[x] ^ ((!array[(x + 1) % 5]) & (array[(x + 2) % 5]));
-                            }
-                        }
-                    }
-                };
-
-                // Iota
-                a[0] ^= RC[i];
             }
         }
 
-        pub struct $struct_name;
-
-        impl Permutation for $struct_name {
-            fn execute(buffer: &mut Buffer) {
-                $name(buffer.words());
+        unroll! {
+            for x in 0..5 {
+                unroll! {
+                    for y_count in 0..5 {
+                        let y = y_count * 5;
+                        a[y + x] ^= array[(x + 4) % 5] ^ array[(x + 1) % 5].rotate_left(1);
+                    }
+                }
             }
         }
+
+        // Rho and pi
+        let mut last = a[1];
+        unroll! {
+            for x in 0..24 {
+                array[0] = a[PI[x]];
+                a[PI[x]] = last.rotate_left(RHO[x]);
+                last = array[0];
+            }
+        }
+
+        // Chi
+        unroll! {
+            for y_step in 0..5 {
+                let y = y_step * 5;
+
+                unroll! {
+                    for x in 0..5 {
+                        array[x] = a[y + x];
+                    }
+                }
+
+                unroll! {
+                    for x in 0..5 {
+                        a[y + x] = array[x] ^ ((!array[(x + 1) % 5]) & (array[(x + 2) % 5]));
+                    }
+                }
+            }
+        };
+
+        // Iota
+        a[0] ^= RC[i];
     }
 }
 
@@ -205,47 +232,26 @@ pub trait Permutation {
     fn execute(a: &mut Buffer);
 }
 
-keccak_impl!("`keccak-f[1600, 24]`", keccakf, KeccakF, 24, [
-    1,
-    0x8082,
-    0x800000000000808a,
-    0x8000000080008000,
-    0x808b,
-    0x80000001,
-    0x8000000080008081,
-    0x8000000000008009,
-    0x8a,
-    0x88,
-    0x80008009,
-    0x8000000a,
-    0x8000808b,
-    0x800000000000008b,
-    0x8000000000008089,
-    0x8000000000008003,
-    0x8000000000008002,
-    0x8000000000000080,
-    0x800a,
-    0x800000008000000a,
-    0x8000000080008081,
-    0x8000000000008080,
-    0x80000001,
-    0x8000000080008008,
-]);
+macro_rules! keccak_impl {
+    ($doc:expr, $name:ident, $struct_name:ident, $rc:expr) => {
+        #[doc = $doc]
+        pub fn $name(a: &mut [u64; WORDS]) {
+            keccak::<{ $rc.len() }>(a, &$rc)
+        }
 
-keccak_impl!("`keccak-p[1600, 12]`", keccakp, KeccakP, 12, [
-    0x8000808b,
-    0x800000000000008b,
-    0x8000000000008089,
-    0x8000000000008003,
-    0x8000000000008002,
-    0x8000000000000080,
-    0x800a,
-    0x800000008000000a,
-    0x8000000080008081,
-    0x8000000000008080,
-    0x80000001,
-    0x8000000080008008,
-]);
+        pub struct $struct_name;
+
+        impl Permutation for $struct_name {
+            fn execute(buffer: &mut Buffer) {
+                $name(buffer.words());
+            }
+        }
+    }
+}
+
+keccak_impl!("`keccak-f[1600, 24]`", keccakf, KeccakF, KECCAK_F_RC);
+
+keccak_impl!("`keccak-p[1600, 12]`", keccakp, KeccakP, KECCAK_P_RC);
 
 #[derive(Clone, Copy)]
 enum Mode {
