@@ -123,47 +123,6 @@ fn keccak<const ROUNDS: usize>(a: &mut [u64; WORDS], RC: &'static [u64; ROUNDS])
     }
 }
 
-#[cfg(feature = "encode-len")]
-pub mod encode_len {
-    pub struct EncodedLen {
-        offset: usize,
-        buffer: [u8; 9],
-    }
-
-    impl EncodedLen {
-        pub fn value(&self) -> &[u8] {
-            &self.buffer[self.offset..]
-        }
-    }
-
-    pub fn left_encode(len: usize) -> EncodedLen {
-        let len = len as u64;
-        let mut buffer = [0u8; 9];
-        buffer[1..].copy_from_slice(&len.to_be_bytes());
-        let offset = if len == 0 { 7 } else { (len.leading_zeros() / 8) as usize };
-        buffer[offset] = 8 - offset as u8;
-        EncodedLen { offset, buffer }
-    }
-
-    pub fn right_encode(len: usize) -> EncodedLen {
-        let len = len as u64;
-        let mut buffer = [0u8; 9];
-        buffer[..8].copy_from_slice(&len.to_be_bytes());
-        let offset = if len == 0 { 7 } else { (len.leading_zeros() / 8) as usize };
-        buffer[8] = 8 - offset as u8;
-        EncodedLen { offset, buffer }
-    }
-
-    pub fn k12_encode(len: usize) -> EncodedLen {
-        let len = len as u64;
-        let mut buffer = [0u8; 9];
-        buffer[..8].copy_from_slice(&len.to_be_bytes());
-        let offset = if len == 0 { 8 } else { (len.leading_zeros() / 8) as usize };
-        buffer[8] = 8 - offset as u8;
-        EncodedLen { offset, buffer }
-    }
-}
-
 #[derive(Default, Clone)]
 pub struct Buffer([u64; WORDS]);
 
@@ -375,6 +334,20 @@ impl<P: Permutation> KeccakState<P> {
         self.offset = 0;
         self.mode = Mode::Absorbing;
     }
+
+    pub fn absorb_len_left(&mut self, len: usize) {
+        let lz = len.leading_zeros() / 8;
+        let len = len.to_be_bytes();
+        self.absorb(&[(core::mem::size_of::<usize>() as u8) - (lz as u8)]);
+        self.absorb(&len[lz as usize..]);
+    }
+
+    pub fn absorb_len_right(&mut self, len: usize) {
+        let lz = len.leading_zeros() / 8;
+        let len = len.to_be_bytes();
+        self.absorb(&len[lz as usize..]);
+        self.absorb(&[(core::mem::size_of::<usize>() as u8) - (lz as u8)]);
+    }
 }
 
 pub const fn bits_to_rate(bits: usize) -> usize {
@@ -385,44 +358,3 @@ pub const DELIM_KECCAK : u8 = 0x01;
 pub const DELIM_SHA3   : u8 = 0x06;
 pub const DELIM_SHAKE  : u8 = 0x1f;
 pub const DELIM_CSHAKE : u8 = 0x04;
-
-#[cfg(test)]
-mod tests {
-    #[cfg(feature = "encode-len")]
-    #[test]
-    fn test_encode_len() {
-        macro_rules! test_encode_len {
-            ($($fn_name:ident {$($len:literal -> $encoded:literal)*})*) => {
-                $($(assert_eq!($fn_name($len).value(), hex_literal::hex!($encoded));)*)*
-            };
-        }
-
-        use crate::encode_len::{left_encode, right_encode, k12_encode};
-
-        test_encode_len! {
-            left_encode {
-                0 -> "01 00"
-                0x80 -> "01 80"
-                0x10000 -> "03 010000"
-                0x1000 -> "02 1000"
-                0x4321 -> "02 4321"
-            }
-
-            right_encode {
-                0 -> "00 01"
-                0x80 -> "80 01"
-                0x10000 -> "010000 03"
-                0x1000 -> "1000 02"
-                0x4321 -> "4321 02"
-            }
-
-            k12_encode {
-                0 -> "00"
-                0x80 -> "80 01"
-                0x10000 -> "010000 03"
-                0x1000 -> "1000 02"
-                0x4321 -> "4321 02"
-            }
-        }
-    }
-}
