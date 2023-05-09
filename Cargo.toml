@@ -20,6 +20,7 @@ zeroize-on-drop = ["zeroize"]
 
 [[example]]
 name = "cshake"
+required-features = ["zeroize-on-drop"]
 
 [[example]]
 name = "k12"

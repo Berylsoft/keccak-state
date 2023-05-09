@@ -336,17 +336,25 @@ impl<P: Permutation> KeccakState<P> {
     }
 
     pub fn absorb_len_left(&mut self, len: usize) {
-        let lz = len.leading_zeros() / 8;
-        let len = len.to_be_bytes();
-        self.absorb(&[(core::mem::size_of::<usize>() as u8) - (lz as u8)]);
-        self.absorb(&len[lz as usize..]);
+        if len == 0 {
+            self.absorb(&[1, 0]);
+        } else {
+            let lz = len.leading_zeros() / 8;
+            let len = len.to_be_bytes();
+            self.absorb(&[(core::mem::size_of::<usize>() as u8) - (lz as u8)]);
+            self.absorb(&len[lz as usize..]);
+        }
     }
 
     pub fn absorb_len_right(&mut self, len: usize) {
-        let lz = len.leading_zeros() / 8;
-        let len = len.to_be_bytes();
-        self.absorb(&len[lz as usize..]);
-        self.absorb(&[(core::mem::size_of::<usize>() as u8) - (lz as u8)]);
+        if len == 0 {
+            self.absorb(&[0, 1]);
+        } else {
+            let lz = len.leading_zeros() / 8;
+            let len = len.to_be_bytes();
+            self.absorb(&len[lz as usize..]);
+            self.absorb(&[(core::mem::size_of::<usize>() as u8) - (lz as u8)]);
+        }
     }
 }
 
