@@ -21,8 +21,11 @@ zeroize-on-drop = ["zeroize"]
 [[example]]
 name = "cshake"
 
+[[example]]
+name = "k12"
+
 [dev-dependencies]
-tiny-keccak = { version = "2", features = ["cshake"] }
+tiny-keccak = { version = "2", features = ["cshake", "k12"] }
 getrandom = "0.2"
 
 [profile.dev]

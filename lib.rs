@@ -53,8 +53,8 @@ const KECCAK_P_RC: [u64; 12] = [
 ];
 
 #[allow(unused_assignments, non_snake_case)]
-#[inline]
-fn keccak<const ROUNDS: usize>(a: &mut [u64; WORDS], RC: &'static [u64; ROUNDS]) {
+#[inline(always)]
+pub fn keccak<const ROUNDS: usize>(a: &mut [u64; WORDS], RC: &[u64; ROUNDS]) {
     for i in 0..ROUNDS {
         use crunchy::unroll;
 
@@ -228,7 +228,7 @@ pub struct KeccakState<P> {
     buffer: Buffer,
     offset: usize,
     rate: usize,
-    delim: u8,
+    pub delim: u8,
     mode: Mode,
     permutation: core::marker::PhantomData<P>,
 }
