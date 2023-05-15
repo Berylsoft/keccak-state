@@ -36,3 +36,9 @@ debug = false   # Controls whether the compiler passes `-g`
 [profile.test]
 opt-level = 3  # Controls the --opt-level the compiler builds with
 debug = false   # Controls whether the compiler passes `-g`
+
+[workspace]
+resolver = "2"
+members = [
+    "cshake",
+]
