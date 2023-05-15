@@ -196,7 +196,7 @@ impl Drop for Buffer {
 }
 
 pub trait Permutation {
-    fn execute(a: &mut Buffer);
+    fn execute(a: &mut [u64; WORDS]);
 }
 
 macro_rules! keccak_impl {
@@ -209,8 +209,8 @@ macro_rules! keccak_impl {
         pub struct $struct_name;
 
         impl Permutation for $struct_name {
-            fn execute(buffer: &mut Buffer) {
-                $name(buffer.words());
+            fn execute(buffer: &mut [u64; WORDS]) {
+                $name(buffer);
             }
         }
     }
@@ -264,7 +264,7 @@ impl<P: Permutation> KeccakState<P> {
     }
 
     fn keccak(&mut self) {
-        P::execute(&mut self.buffer);
+        P::execute(&mut self.buffer.words());
     }
 
     pub fn absorb(&mut self, input: &[u8]) {
