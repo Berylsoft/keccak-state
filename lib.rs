@@ -10,6 +10,7 @@ const PI: [usize; 24] = [
 
 const WORDS: usize = 25;
 
+#[cfg(feature = "keccak-f")]
 const KECCAK_F_RC: [u64; 24] = [
     1,
     0x8082,
@@ -37,6 +38,7 @@ const KECCAK_F_RC: [u64; 24] = [
     0x8000000080008008,
 ];
 
+#[cfg(feature = "keccak-p")]
 const KECCAK_P_RC: [u64; 12] = [
     0x8000808b,
     0x800000000000008b,
@@ -214,8 +216,10 @@ macro_rules! keccak_impl {
     }
 }
 
+#[cfg(feature = "keccak-f")]
 keccak_impl!("`keccak-f[1600, 24]`", keccakf, KeccakF, KECCAK_F_RC);
 
+#[cfg(feature = "keccak-p")]
 keccak_impl!("`keccak-p[1600, 12]`", keccakp, KeccakP, KECCAK_P_RC);
 
 #[derive(Clone, Copy)]
@@ -335,6 +339,7 @@ impl<P: Permutation> KeccakState<P> {
         self.mode = Mode::Absorbing;
     }
 
+    #[cfg(feature = "left-encode")]
     pub fn absorb_len_left(&mut self, len: usize) {
         if len == 0 {
             self.absorb(&[1, 0]);
@@ -346,6 +351,7 @@ impl<P: Permutation> KeccakState<P> {
         }
     }
 
+    #[cfg(feature = "right-encode")]
     pub fn absorb_len_right(&mut self, len: usize) {
         if len == 0 {
             self.absorb(&[0, 1]);
