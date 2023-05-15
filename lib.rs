@@ -54,6 +54,9 @@ const KECCAK_P_RC: [u64; 12] = [
     0x8000000080008008,
 ];
 
+#[cfg(feature = "zeroize-on-drop")]
+use zeroize::Zeroize;
+
 #[allow(unused_assignments, non_snake_case)]
 #[inline(always)]
 pub fn keccak<const ROUNDS: usize>(a: &mut [u64; WORDS], RC: &[u64; ROUNDS]) {
@@ -118,10 +121,7 @@ pub fn keccak<const ROUNDS: usize>(a: &mut [u64; WORDS], RC: &[u64; ROUNDS]) {
         a[0] ^= RC[i];
 
         #[cfg(feature = "zeroize-on-drop")]
-        {
-            use zeroize::Zeroize;
-            array.zeroize()    
-        }
+        array.zeroize()    
     }
 }
 
@@ -185,12 +185,19 @@ impl Buffer {
         self.execute(offset, 1, |buff| buff[0] ^= delim);
         self.execute(rate - 1, 1, |buff| buff[0] ^= 0x80);
     }
+
+    #[inline]
+    fn reset(&mut self) {
+        #[cfg(feature = "zeroize-on-drop")]
+        self.0.zeroize();
+        #[cfg(not(feature = "zeroize-on-drop"))]
+        let _ = core::mem::replace(self, Buffer::default());
+    }
 }
 
 #[cfg(feature = "zeroize-on-drop")]
 impl Drop for Buffer {
     fn drop(&mut self) {
-        use zeroize::Zeroize;
         self.0.zeroize()
     }
 }
@@ -326,15 +333,7 @@ impl<P: Permutation> KeccakState<P> {
     }
 
     pub fn reset(&mut self) {
-        #[cfg(feature = "zeroize-on-drop")]
-        {
-            use zeroize::Zeroize;
-            self.buffer.0.zeroize();
-        }
-        #[cfg(not(feature = "zeroize-on-drop"))]
-        {
-            self.buffer = Buffer::default();
-        }
+        self.buffer.reset();
         self.offset = 0;
         self.mode = Mode::Absorbing;
     }
