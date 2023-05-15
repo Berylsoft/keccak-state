@@ -73,8 +73,8 @@ impl<C: CShakeCustom> CShake<C> {
 
     #[inline]
     pub fn skip<const N: usize>(&mut self) {
-        #[allow(unused_variables)]
-        let buf = self.squeeze_to_array::<N>();
+        #[allow(unused_variables, unused_mut)]
+        let mut buf = self.squeeze_to_array::<N>();
         #[cfg(feature = "zeroize-on-drop")]
         buf.zeroize();
     }
