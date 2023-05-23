@@ -134,6 +134,12 @@ pub trait CShakeCustom: Sized {
     }
 }
 
+pub struct NoCustom;
+
+impl CShakeCustom for NoCustom {
+    const CUSTOM_STRING: &'static str = "";
+}
+
 #[macro_export]
 macro_rules! cshake_customs {
     ($prefix:literal $($name:ident)*) => {$(
@@ -144,4 +150,45 @@ macro_rules! cshake_customs {
             const CUSTOM_STRING: &'static str = concat!($prefix, stringify!($name));
         }
     )*};
+}
+
+#[cfg(feature = "rand")]
+pub mod rand {
+    use std::{thread_local, rc::Rc, cell::UnsafeCell, ops::{DerefMut, Deref}};
+    #[cfg(feature = "zeroize-on-drop")]
+    use zeroize::Zeroize;
+    use crate::{CShake, CShakeCustom, NoCustom};
+
+    fn init() -> CShake<NoCustom> {
+        let mut buf = [0; 32];
+        getrandom::getrandom(&mut buf).unwrap();
+        let ctx = NoCustom.create().chain_absorb(&buf);
+        #[cfg(feature = "zeroize-on-drop")]
+        buf.zeroize();
+        ctx
+    }
+
+    thread_local! {
+        static THREAD_RNG: Rc<UnsafeCell<CShake<NoCustom>>> = Rc::new(UnsafeCell::new(init()));
+    }
+
+    pub struct ThreadRng(Rc<UnsafeCell<CShake<NoCustom>>>);
+
+    impl Deref for ThreadRng {
+        type Target = CShake<NoCustom>;
+
+        fn deref(&self) -> &Self::Target {
+            unsafe { &*self.0.get() }
+        }
+    }
+
+    impl DerefMut for ThreadRng {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            unsafe { &mut *self.0.get() }
+        }
+    }
+
+    pub fn thread_rng() -> ThreadRng {
+        ThreadRng(THREAD_RNG.with(Clone::clone))
+    }
 }
