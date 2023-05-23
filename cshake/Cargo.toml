@@ -13,8 +13,10 @@ path = "lib.rs"
 zeroize = { version = "1", optional = true }
 foundations = { path = "../../foundations", features = ["xor"] }
 keccak-core = { path = "../", features = ["zeroize-on-drop", "left-encode"] }
+getrandom = { version = "0.2", optional = true }
 
 [features]
 default = []
 alloc = []
 zeroize-on-drop = ["zeroize", "keccak-core/zeroize-on-drop"]
+rand = ["alloc", "getrandom"]
