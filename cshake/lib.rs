@@ -174,13 +174,20 @@ macro_rules! cshake_customs {
 
 #[cfg(feature = "rand")]
 pub mod rand {
-    use std::{thread_local, rc::Rc, cell::UnsafeCell};
+    use std::{thread_local, rc::Rc, cell::UnsafeCell, mem::MaybeUninit};
     use crate::{CShake, Absorb, Squeeze, CShakeCustom, NoCustom};
 
+    #[must_use]
+    #[inline(always)]
+    pub const fn uninit_array<T, const N: usize>() -> [MaybeUninit<T>; N] {
+        // SAFETY: An uninitialized `[MaybeUninit<_>; LEN]` is valid.
+        unsafe { MaybeUninit::<[MaybeUninit<T>; N]>::uninit().assume_init() }
+    }
+
     fn init() -> CShake<NoCustom> {
-        let mut buf = [0; 32];
-        getrandom::getrandom(&mut buf).unwrap();
-        let ctx = NoCustom.create().chain_absorb(&buf);
+        let mut buf = uninit_array::<u8, 32>();
+        let ready_buf = getrandom::getrandom_uninit(&mut buf).unwrap();
+        let ctx = NoCustom.create().chain_absorb(&ready_buf);
         ctx
     }
 
