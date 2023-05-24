@@ -1,4 +1,4 @@
-use keccak_core::{bits_to_rate, KeccakP, KeccakState};
+use keccak_core::{bits_to_rate, KeccakState};
 
 struct EncodedLen {
     offset: usize,
@@ -23,8 +23,8 @@ fn encode_len(len: usize) -> EncodedLen {
 
 #[derive(Clone)]
 pub struct KangarooTwelve<T> {
-    state: KeccakState<KeccakP>,
-    current_chunk: KeccakState<KeccakP>,
+    state: KeccakState<false>,
+    current_chunk: KeccakState<false>,
     custom_string: Option<T>,
     written: usize,
     chunks: usize,
@@ -87,7 +87,7 @@ impl<T: AsRef<[u8]>> KangarooTwelve<T> {
 
 #[derive(Clone)]
 pub struct KangarooTwelveXof {
-    state: KeccakState<KeccakP>,
+    state: KeccakState<false>,
 }
 
 impl<T: AsRef<[u8]>> KangarooTwelve<T> {

@@ -1,10 +1,10 @@
 #![cfg_attr(not(feature = "alloc"), no_std)]
 
-use keccak_core::{KeccakState, KeccakF};
+use keccak_core::KeccakState;
 #[cfg(feature = "zeroize-on-drop")]
 use zeroize::Zeroize;
 
-fn init(name: &[u8], custom_string: &[u8]) -> KeccakState<KeccakF> {
+fn init(name: &[u8], custom_string: &[u8]) -> KeccakState<true> {
     use keccak_core::{bits_to_rate, DELIM_CSHAKE, DELIM_SHAKE};
     let rate = bits_to_rate(256);
     // if there is no name and no customization string
@@ -81,7 +81,7 @@ pub trait Once: Absorb + Squeeze {
 
 impl<T: Absorb + Squeeze> Once for T {}
 pub struct CShake<C: CShakeCustom> {
-    ctx: KeccakState<KeccakF>,
+    ctx: KeccakState<true>,
     custom: C,
 }
 

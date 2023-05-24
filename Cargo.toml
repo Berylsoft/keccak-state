@@ -15,9 +15,6 @@ crunchy = "0.2.2"
 zeroize = { version = "1", optional = true }
 
 [features]
-default = ["keccak-f"]
-keccak-f = []
-keccak-p = []
 left-encode = []
 right-encode = []
 zeroize-on-drop = ["zeroize"]
@@ -28,7 +25,6 @@ required-features = ["zeroize-on-drop", "left-encode"]
 
 [[example]]
 name = "k12"
-required-features = ["keccak-p"]
 
 [dev-dependencies]
 tiny-keccak = { version = "2", features = ["cshake", "k12"] }

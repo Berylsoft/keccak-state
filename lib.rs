@@ -35,7 +35,6 @@ const WORDS: usize = BITS / 64;
 const BYTES: usize = BITS / 8;
 const BITS: usize = 1600;
 
-#[cfg(feature = "keccak-f")]
 const KECCAK_F_RC: [u64; 24] = [
     1,
     0x8082,
@@ -63,7 +62,6 @@ const KECCAK_F_RC: [u64; 24] = [
     0x8000000080008008,
 ];
 
-#[cfg(feature = "keccak-p")]
 const KECCAK_P_RC: [u64; 12] = [
     0x8000808b,
     0x800000000000008b,
@@ -150,49 +148,21 @@ pub fn keccak<const ROUNDS: usize>(a: &mut [u64; WORDS], RC: &[u64; ROUNDS]) {
     }
 }
 
-pub trait Permutation {
-    fn execute(a: &mut [u64; WORDS]);
-}
-
-macro_rules! keccak_impl {
-    ($doc:expr, $name:ident, $struct_name:ident, $rc:expr) => {
-        #[doc = $doc]
-        pub fn $name(a: &mut [u64; WORDS]) {
-            keccak::<{ $rc.len() }>(a, &$rc)
-        }
-
-        pub struct $struct_name;
-
-        impl Permutation for $struct_name {
-            fn execute(buffer: &mut [u64; WORDS]) {
-                $name(buffer);
-            }
-        }
-    }
-}
-
-#[cfg(feature = "keccak-f")]
-keccak_impl!("`keccak-f[1600, 24]`", keccakf, KeccakF, KECCAK_F_RC);
-
-#[cfg(feature = "keccak-p")]
-keccak_impl!("`keccak-p[1600, 12]`", keccakp, KeccakP, KECCAK_P_RC);
-
 #[derive(Clone, Copy)]
 enum Mode {
     Absorbing,
     Squeezing,
 }
 
-pub struct KeccakState<P> {
+pub struct KeccakState<const P: bool> {
     buffer: [u8; BYTES],
     offset: usize,
     rate: usize,
     pub delim: u8,
     mode: Mode,
-    permutation: core::marker::PhantomData<P>,
 }
 
-impl<P> Clone for KeccakState<P> {
+impl<const P: bool> Clone for KeccakState<P> {
     fn clone(&self) -> Self {
         KeccakState {
             buffer: self.buffer.clone(),
@@ -200,13 +170,12 @@ impl<P> Clone for KeccakState<P> {
             rate: self.rate,
             delim: self.delim,
             mode: self.mode,
-            permutation: core::marker::PhantomData,
         }
     }
 }
 
 #[cfg(feature = "zeroize-on-drop")]
-impl<P> Drop for KeccakState<P> {
+impl<const P: bool> Drop for KeccakState<P> {
     fn drop(&mut self) {
         self.buffer.zeroize();
         self.offset = 0;
@@ -251,7 +220,7 @@ macro_rules! squeeze_pre {
     }};
 }
 
-impl<P: Permutation> KeccakState<P> {
+impl<const P: bool> KeccakState<P> {
     pub fn new(rate: usize, delim: u8) -> Self {
         assert!(rate != 0, "rate cannot be equal 0");
         KeccakState {
@@ -260,7 +229,6 @@ impl<P: Permutation> KeccakState<P> {
             rate,
             delim,
             mode: Mode::Absorbing,
-            permutation: core::marker::PhantomData,
         }
     }
 
@@ -298,7 +266,11 @@ impl<P: Permutation> KeccakState<P> {
         let words: &mut [u64; WORDS] = unsafe { core::mem::transmute(&mut self.buffer) };
         #[cfg(target_endian = "big")]
         swap_endianess(words);
-        P::execute(words);
+        if P {
+            keccak::<{ KECCAK_F_RC.len() }>(words, &KECCAK_F_RC);
+        } else {
+            keccak::<{ KECCAK_P_RC.len() }>(words, &KECCAK_P_RC);
+        }
         #[cfg(target_endian = "big")]
         swap_endianess(words);
     }
