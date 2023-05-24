@@ -1,8 +1,6 @@
 #![cfg_attr(not(feature = "alloc"), no_std)]
 
-use foundations::xor;
 use keccak_core::{KeccakState, KeccakF};
-
 #[cfg(feature = "zeroize-on-drop")]
 use zeroize::Zeroize;
 
@@ -73,18 +71,22 @@ pub trait Squeeze {
 
     fn squeeze_xor_array<const N: usize>(&mut self, dest: &mut [u8; N]) {
         #[allow(unused_mut)]
-        let mut mask = self.squeeze_to_array();
-        xor::xor_array(dest, &mask);
+        let mut mask = self.squeeze_to_array::<N>();
+        for i in 0..N {
+            dest[i] ^= mask[i];
+        }
         #[cfg(feature = "zeroize-on-drop")]
         mask.zeroize();
     }
 
     #[cfg(feature = "alloc")]
     fn squeeze_xor_slice(&mut self, dest: &mut [u8]) {
+        let len = dest.len();
         #[allow(unused_mut)]
-        let mut mask = self.squeeze_to_vec(dest.len());
-        // hardcode inline without reslicing because no need to check
-        xor::xor(dest, &mask);
+        let mut mask = self.squeeze_to_vec(len);
+        for i in 0..len {
+            dest[i] ^= mask[i];
+        }
         #[cfg(feature = "zeroize-on-drop")]
         mask.zeroize();
     }
