@@ -287,7 +287,7 @@ impl<P: Permutation> KeccakState<P> {
     }
 
     fn xorin(&mut self, src: &[u8], p: usize, offset: usize, len: usize) {
-        self.execute(offset, len, |dst| xor(dst, &src[p..]));
+        self.execute(offset, len, |dst| xor(dst, &src[p..][..len]));
     }
 
     fn setout(&mut self, dst: &mut [u8], p: usize, offset: usize, len: usize) {
