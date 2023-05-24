@@ -154,20 +154,18 @@ enum Mode {
     Squeezing,
 }
 
-pub struct KeccakState<const P: bool> {
+pub struct KeccakState<const P: bool, const R: usize> {
     buffer: [u8; BYTES],
     offset: usize,
-    rate: usize,
     pub delim: u8,
     mode: Mode,
 }
 
-impl<const P: bool> Clone for KeccakState<P> {
+impl<const P: bool, const R: usize> Clone for KeccakState<P, R> {
     fn clone(&self) -> Self {
         KeccakState {
             buffer: self.buffer.clone(),
             offset: self.offset,
-            rate: self.rate,
             delim: self.delim,
             mode: self.mode,
         }
@@ -175,7 +173,7 @@ impl<const P: bool> Clone for KeccakState<P> {
 }
 
 #[cfg(feature = "zeroize-on-drop")]
-impl<const P: bool> Drop for KeccakState<P> {
+impl<const P: bool, const R: usize> Drop for KeccakState<P, R> {
     fn drop(&mut self) {
         self.buffer.zeroize();
         self.offset = 0;
@@ -186,14 +184,14 @@ macro_rules! flodp {
     ($self:expr, $iobuf:expr, $bufl:expr, $exec:ident) => {{
         let mut p = 0;
         let mut l = $bufl;
-        let mut rate = $self.rate - $self.offset;
+        let mut rate = R - $self.offset;
         let mut offset = $self.offset;
         while l >= rate {
             $self.$exec($iobuf, p, offset, rate);
             $self.keccak();
             p += rate;
             l -= rate;
-            rate = $self.rate;
+            rate = R;
             offset = 0;
         }
         $self.$exec($iobuf, p, offset, l);
@@ -220,13 +218,13 @@ macro_rules! squeeze_pre {
     }};
 }
 
-impl<const P: bool> KeccakState<P> {
-    pub fn new(rate: usize, delim: u8) -> Self {
-        assert!(rate != 0, "rate cannot be equal 0");
+impl<const P: bool, const R: usize> KeccakState<P, R> {
+    pub fn init(delim: u8) -> Self {
+        // TODO complie time
+        assert!(R != 0, "rate cannot be equal 0");
         KeccakState {
             buffer: [0; BYTES],
             offset: 0,
-            rate,
             delim,
             mode: Mode::Absorbing,
         }
@@ -259,7 +257,7 @@ impl<const P: bool> KeccakState<P> {
     fn pad(&mut self) {
         let delim = self.delim;
         self.execute(self.offset, 1, |buff| buff[0] ^= delim);
-        self.execute(self.rate - 1, 1, |buff| buff[0] ^= 0x80);
+        self.execute(R - 1, 1, |buff| buff[0] ^= 0x80);
     }
 
     fn keccak(&mut self) {
@@ -342,3 +340,14 @@ pub const DELIM_KECCAK : u8 = 0x01;
 pub const DELIM_SHA3   : u8 = 0x06;
 pub const DELIM_SHAKE  : u8 = 0x1f;
 pub const DELIM_CSHAKE : u8 = 0x04;
+
+#[allow(non_upper_case_globals)]
+pub const KeccakF: bool = true;
+#[allow(non_upper_case_globals)]
+pub const KeccakP: bool = false;
+
+pub const R128: usize = bits_to_rate(128);
+pub const R224: usize = bits_to_rate(224);
+pub const R256: usize = bits_to_rate(256);
+pub const R384: usize = bits_to_rate(384);
+pub const R512: usize = bits_to_rate(512);
