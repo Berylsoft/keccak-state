@@ -24,7 +24,7 @@ zeroize-on-drop = ["zeroize"]
 
 [[example]]
 name = "cshake"
-required-features = ["zeroize-on-drop"]
+required-features = ["zeroize-on-drop", "left-encode"]
 
 [[example]]
 name = "k12"
