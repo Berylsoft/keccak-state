@@ -46,49 +46,22 @@ pub trait Squeeze {
     #[cfg(feature = "alloc")]
     #[inline]
     fn squeeze_to_vec(&mut self, len: usize) -> Vec<u8> {
-        // TODO use MaybeUninit
         let mut buf = vec![0; len];
         self.squeeze(&mut buf);
         buf
     }
+}
 
-    // TODO: necessary to zeroize?
+pub trait SqueezeXor {
+    fn squeeze_xor(&mut self, output: &mut [u8]);
+}
 
+pub trait SqueezeSkip {
+    fn skip(&mut self, len: usize);
+
+    #[inline(always)]
     fn skip_const<const N: usize>(&mut self) {
-        #[allow(unused_variables, unused_mut)]
-        let mut buf = self.squeeze_to_array::<N>();
-        #[cfg(feature = "zeroize-on-drop")]
-        buf.zeroize();
-    }
-
-    #[cfg(feature = "alloc")]
-    fn skip(&mut self, len: usize) {
-        #[allow(unused_variables, unused_mut)]
-        let mut buf = self.squeeze_to_vec(len);
-        #[cfg(feature = "zeroize-on-drop")]
-        buf.zeroize();
-    }
-
-    fn squeeze_xor_array<const N: usize>(&mut self, dest: &mut [u8; N]) {
-        #[allow(unused_mut)]
-        let mut mask = self.squeeze_to_array::<N>();
-        for i in 0..N {
-            dest[i] ^= mask[i];
-        }
-        #[cfg(feature = "zeroize-on-drop")]
-        mask.zeroize();
-    }
-
-    #[cfg(feature = "alloc")]
-    fn squeeze_xor_slice(&mut self, dest: &mut [u8]) {
-        let len = dest.len();
-        #[allow(unused_mut)]
-        let mut mask = self.squeeze_to_vec(len);
-        for i in 0..len {
-            dest[i] ^= mask[i];
-        }
-        #[cfg(feature = "zeroize-on-drop")]
-        mask.zeroize();
+        self.skip(N)
     }
 }
 
@@ -123,6 +96,20 @@ impl<C: CShakeCustom> Squeeze for CShake<C> {
     #[inline(always)]
     fn squeeze(&mut self, output: &mut [u8]) {
         self.ctx.squeeze(output);
+    }
+}
+
+impl<C: CShakeCustom> SqueezeXor for CShake<C> {
+    #[inline(always)]
+    fn squeeze_xor(&mut self, output: &mut [u8]) {
+        self.ctx.squeeze_xor(output);
+    }
+}
+
+impl<C: CShakeCustom> SqueezeSkip for CShake<C> {
+    #[inline(always)]
+    fn skip(&mut self, len: usize) {
+        self.ctx.squeeze_skip(len)
     }
 }
 

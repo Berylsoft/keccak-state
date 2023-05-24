@@ -1,5 +1,20 @@
 #![no_std]
 
+#[inline]
+pub fn xor(dst: &mut [u8], src: &[u8]) {
+    let len = dst.len();
+
+    // Check *before* looping that both are long enough,
+    // in a way that makes it directly obvious to LLVM
+    // that the indexing below will be in-bounds.
+    // ref: https://users.rust-lang.org/t/93119/10
+    let (dst, src) = (&mut dst[..len], &src[..len]);
+
+    for i in 0..len {
+        dst[i] ^= src[i];
+    }
+}
+
 const RHO: [u32; 24] = [
     1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44,
 ];
@@ -161,24 +176,20 @@ impl Buffer {
         swap_endianess(&mut self.0[start..end]);
     }
 
-    fn setout(&mut self, dst: &mut [u8], offset: usize, len: usize) {
-        self.execute(offset, len, |buffer| dst[..len].copy_from_slice(buffer));
+    fn xorin(&mut self, src: &[u8], ip: usize, offset: usize, len: usize) {
+        self.execute(offset, len, |dst| xor(dst, &src[ip..]));
     }
 
-    fn xorin(&mut self, src: &[u8], offset: usize, len: usize) {
-        self.execute(offset, len, |dst| {
-            let len = dst.len();
+    fn setout(&mut self, dst: &mut [u8], op: usize, offset: usize, len: usize) {
+        self.execute(offset, len, |buffer| dst[op..len].copy_from_slice(buffer));
+    }
 
-            // Check *before* looping that both are long enough,
-            // in a way that makes it directly obvious to LLVM
-            // that the indexing below will be in-bounds.
-            // ref: https://users.rust-lang.org/t/93119/10
-            let (dst, src) = (&mut dst[..len], &src[..len]);
-        
-            for i in 0..len {
-                dst[i] ^= src[i];
-            }
-        });
+    fn xorout(&mut self, dst: &mut [u8], op: usize, offset: usize, len: usize) {
+        self.execute(offset, len, |src| xor(&mut dst[op..len], src));
+    }
+
+    #[inline(always)]
+    fn skipout(&mut self, _dst: &mut [u8], _op: usize, _offset: usize, _len: usize) {
     }
 
     fn pad(&mut self, offset: usize, delim: u8, rate: usize) {
@@ -257,6 +268,59 @@ impl<P> Clone for KeccakState<P> {
     }
 }
 
+macro_rules! absorb_impl {
+    ($self:expr, $input:expr, $inl:expr, $inf:ident) => {
+        if let Mode::Squeezing = $self.mode {{
+            $self.mode = Mode::Absorbing;
+            $self.fill_block();
+        }
+
+        // first foldp
+        let mut ip = 0;
+        let mut l = $inl;
+        let mut rate = $self.rate - $self.offset;
+        let mut offset = $self.offset;
+        while l >= rate {
+            $self.buffer.$inf($input, ip, offset, rate);
+            $self.keccak();
+            ip += rate;
+            l -= rate;
+            rate = $self.rate;
+            offset = 0;
+        }
+
+        $self.buffer.$inf($input, ip, offset, l);
+        $self.offset = offset + l;
+    }};
+}
+
+macro_rules! squeeze_impl {
+    ($self:expr, $output:expr, $outl:expr, $outf:ident) => {{
+        if let Mode::Absorbing = $self.mode {
+            $self.mode = Mode::Squeezing;
+            $self.pad();
+            $self.fill_block();
+        }
+
+        // second foldp
+        let mut op = 0;
+        let mut l = $outl;
+        let mut rate = $self.rate - $self.offset;
+        let mut offset = $self.offset;
+        while l >= rate {
+            $self.buffer.$outf($output, op, offset, rate);
+            $self.keccak();
+            op += rate;
+            l -= rate;
+            rate = $self.rate;
+            offset = 0;
+        }
+
+        $self.buffer.$outf($output, op, offset, l);
+        $self.offset = offset + l;
+    }};
+}
+
 impl<P: Permutation> KeccakState<P> {
     pub fn new(rate: usize, delim: u8) -> Self {
         assert!(rate != 0, "rate cannot be equal 0");
@@ -275,27 +339,7 @@ impl<P: Permutation> KeccakState<P> {
     }
 
     pub fn absorb(&mut self, input: &[u8]) {
-        if let Mode::Squeezing = self.mode {
-            self.mode = Mode::Absorbing;
-            self.fill_block();
-        }
-
-        // first foldp
-        let mut ip = 0;
-        let mut l = input.len();
-        let mut rate = self.rate - self.offset;
-        let mut offset = self.offset;
-        while l >= rate {
-            self.buffer.xorin(&input[ip..], offset, rate);
-            self.keccak();
-            ip += rate;
-            l -= rate;
-            rate = self.rate;
-            offset = 0;
-        }
-
-        self.buffer.xorin(&input[ip..], offset, l);
-        self.offset = offset + l;
+        absorb_impl!(self, input, input.len(), xorin)
     }
 
     fn pad(&mut self) {
@@ -303,28 +347,15 @@ impl<P: Permutation> KeccakState<P> {
     }
 
     pub fn squeeze(&mut self, output: &mut [u8]) {
-        if let Mode::Absorbing = self.mode {
-            self.mode = Mode::Squeezing;
-            self.pad();
-            self.fill_block();
-        }
+        squeeze_impl!(self, output, output.len(), setout)
+    }
 
-        // second foldp
-        let mut op = 0;
-        let mut l = output.len();
-        let mut rate = self.rate - self.offset;
-        let mut offset = self.offset;
-        while l >= rate {
-            self.buffer.setout(&mut output[op..], offset, rate);
-            self.keccak();
-            op += rate;
-            l -= rate;
-            rate = self.rate;
-            offset = 0;
-        }
+    pub fn squeeze_xor(&mut self, output: &mut [u8]) {
+        squeeze_impl!(self, output, output.len(), xorout)
+    }
 
-        self.buffer.setout(&mut output[op..], offset, l);
-        self.offset = offset + l;
+    pub fn squeeze_skip(&mut self, len: usize) {
+        squeeze_impl!(self, &mut [], len, skipout)
     }
 
     pub fn fill_block(&mut self) {
