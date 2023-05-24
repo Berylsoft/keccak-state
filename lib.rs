@@ -176,20 +176,20 @@ impl Buffer {
         swap_endianess(&mut self.0[start..end]);
     }
 
-    fn xorin(&mut self, src: &[u8], ip: usize, offset: usize, len: usize) {
-        self.execute(offset, len, |dst| xor(dst, &src[ip..]));
+    fn xorin(&mut self, src: &[u8], p: usize, offset: usize, len: usize) {
+        self.execute(offset, len, |dst| xor(dst, &src[p..]));
     }
 
-    fn setout(&mut self, dst: &mut [u8], op: usize, offset: usize, len: usize) {
-        self.execute(offset, len, |buffer| dst[op..len].copy_from_slice(buffer));
+    fn setout(&mut self, dst: &mut [u8], p: usize, offset: usize, len: usize) {
+        self.execute(offset, len, |buffer| dst[p..][..len].copy_from_slice(buffer));
     }
 
-    fn xorout(&mut self, dst: &mut [u8], op: usize, offset: usize, len: usize) {
-        self.execute(offset, len, |src| xor(&mut dst[op..len], src));
+    fn xorout(&mut self, dst: &mut [u8], p: usize, offset: usize, len: usize) {
+        self.execute(offset, len, |src| xor(&mut dst[p..][..len], src));
     }
 
     #[inline(always)]
-    fn skipout(&mut self, _dst: &mut [u8], _op: usize, _offset: usize, _len: usize) {
+    fn skipout(&mut self, _dst: &mut [u8], _p: usize, _offset: usize, _len: usize) {
     }
 
     fn pad(&mut self, offset: usize, delim: u8, rate: usize) {
@@ -268,56 +268,41 @@ impl<P> Clone for KeccakState<P> {
     }
 }
 
-macro_rules! absorb_impl {
-    ($self:expr, $input:expr, $inl:expr, $inf:ident) => {
-        if let Mode::Squeezing = $self.mode {{
-            $self.mode = Mode::Absorbing;
-            $self.fill_block();
-        }
-
-        // first foldp
-        let mut ip = 0;
-        let mut l = $inl;
+macro_rules! flodp {
+    ($self:expr, $buf:expr, $bufl:expr, $exec:ident) => {{
+        let mut p = 0;
+        let mut l = $bufl;
         let mut rate = $self.rate - $self.offset;
         let mut offset = $self.offset;
         while l >= rate {
-            $self.buffer.$inf($input, ip, offset, rate);
+            $self.buffer.$exec($buf, p, offset, rate);
             $self.keccak();
-            ip += rate;
+            p += rate;
             l -= rate;
             rate = $self.rate;
             offset = 0;
         }
-
-        $self.buffer.$inf($input, ip, offset, l);
+        $self.buffer.$exec($buf, p, offset, l);
         $self.offset = offset + l;
     }};
 }
 
-macro_rules! squeeze_impl {
-    ($self:expr, $output:expr, $outl:expr, $outf:ident) => {{
+macro_rules! absorb_pre {
+    ($self:expr) => {{
+        if let Mode::Squeezing = $self.mode {
+            $self.mode = Mode::Absorbing;
+            $self.fill_block();
+        }
+    }};
+}
+
+macro_rules! squeeze_pre {
+    ($self:expr) => {{
         if let Mode::Absorbing = $self.mode {
             $self.mode = Mode::Squeezing;
             $self.pad();
             $self.fill_block();
         }
-
-        // second foldp
-        let mut op = 0;
-        let mut l = $outl;
-        let mut rate = $self.rate - $self.offset;
-        let mut offset = $self.offset;
-        while l >= rate {
-            $self.buffer.$outf($output, op, offset, rate);
-            $self.keccak();
-            op += rate;
-            l -= rate;
-            rate = $self.rate;
-            offset = 0;
-        }
-
-        $self.buffer.$outf($output, op, offset, l);
-        $self.offset = offset + l;
     }};
 }
 
@@ -339,7 +324,8 @@ impl<P: Permutation> KeccakState<P> {
     }
 
     pub fn absorb(&mut self, input: &[u8]) {
-        absorb_impl!(self, input, input.len(), xorin)
+        absorb_pre!(self);
+        flodp!(self, input, input.len(), xorin)
     }
 
     fn pad(&mut self) {
@@ -347,15 +333,18 @@ impl<P: Permutation> KeccakState<P> {
     }
 
     pub fn squeeze(&mut self, output: &mut [u8]) {
-        squeeze_impl!(self, output, output.len(), setout)
+        squeeze_pre!(self);
+        flodp!(self, output, output.len(), setout)
     }
 
     pub fn squeeze_xor(&mut self, output: &mut [u8]) {
-        squeeze_impl!(self, output, output.len(), xorout)
+        squeeze_pre!(self);
+        flodp!(self, output, output.len(), xorout)
     }
 
     pub fn squeeze_skip(&mut self, len: usize) {
-        squeeze_impl!(self, &mut [], len, skipout)
+        squeeze_pre!(self);
+        flodp!(self, &mut [], len, skipout)
     }
 
     pub fn fill_block(&mut self) {
