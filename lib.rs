@@ -204,20 +204,20 @@ impl<P> Drop for KeccakState<P> {
 }
 
 macro_rules! flodp {
-    ($self:expr, $buf:expr, $bufl:expr, $exec:ident) => {{
+    ($self:expr, $iobuf:expr, $bufl:expr, $exec:ident) => {{
         let mut p = 0;
         let mut l = $bufl;
         let mut rate = $self.rate - $self.offset;
         let mut offset = $self.offset;
         while l >= rate {
-            $self.$exec($buf, p, offset, rate);
+            $self.$exec($iobuf, p, offset, rate);
             $self.keccak();
             p += rate;
             l -= rate;
             rate = $self.rate;
             offset = 0;
         }
-        $self.$exec($buf, p, offset, l);
+        $self.$exec($iobuf, p, offset, l);
         $self.offset = offset + l;
     }};
 }
@@ -286,20 +286,23 @@ impl<P: Permutation> KeccakState<P> {
         swap_endianess(&mut self.0[start..end]);
     }
 
-    fn xorin(&mut self, src: &[u8], p: usize, offset: usize, len: usize) {
-        self.execute(offset, len, |dst| xor(dst, &src[p..][..len]));
+    fn xorin(&mut self, iobuf: &[u8], p: usize, offset: usize, len: usize) {
+        let iobuf = &iobuf[p..][..len];
+        self.execute(offset, len, |buf| xor(buf, iobuf));
     }
 
-    fn setout(&mut self, dst: &mut [u8], p: usize, offset: usize, len: usize) {
-        self.execute(offset, len, |buffer| dst[p..][..len].copy_from_slice(buffer));
+    fn setout(&mut self, iobuf: &mut [u8], p: usize, offset: usize, len: usize) {
+        let iobuf = &mut iobuf[p..][..len];
+        self.execute(offset, len, |buf| <[_]>::copy_from_slice(iobuf, buf));
     }
 
-    fn xorout(&mut self, dst: &mut [u8], p: usize, offset: usize, len: usize) {
-        self.execute(offset, len, |src| xor(&mut dst[p..][..len], src));
+    fn xorout(&mut self, iobuf: &mut [u8], p: usize, offset: usize, len: usize) {
+        let iobuf = &mut iobuf[p..][..len];
+        self.execute(offset, len, |buf| xor(iobuf, buf));
     }
 
     #[inline(always)]
-    fn skipout(&mut self, _dst: &mut [u8], _p: usize, _offset: usize, _len: usize) {
+    fn skipout(&mut self, _1: &mut [u8], _2: usize, _3: usize, _4: usize) {
     }
 
     fn pad(&mut self) {
