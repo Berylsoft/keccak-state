@@ -1,5 +1,13 @@
 #![no_std]
 
+#[cfg(target_endian = "big")]
+#[inline]
+fn swap_endianess(words: &mut [u64; WORDS]) {
+    for item in words {
+        *item = item.swap_bytes();
+    }
+}
+
 #[inline]
 pub fn xor(dst: &mut [u8], src: &[u8]) {
     let len = dst.len();
@@ -23,7 +31,9 @@ const PI: [usize; 24] = [
     10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1,
 ];
 
-const WORDS: usize = 25;
+const WORDS: usize = BITS / 64;
+const BYTES: usize = BITS / 8;
+const BITS: usize = 1600;
 
 #[cfg(feature = "keccak-f")]
 const KECCAK_F_RC: [u64; 24] = [
@@ -174,7 +184,7 @@ enum Mode {
 }
 
 pub struct KeccakState<P> {
-    buffer: [u64; WORDS],
+    buffer: [u8; BYTES],
     offset: usize,
     rate: usize,
     pub delim: u8,
@@ -245,7 +255,7 @@ impl<P: Permutation> KeccakState<P> {
     pub fn new(rate: usize, delim: u8) -> Self {
         assert!(rate != 0, "rate cannot be equal 0");
         KeccakState {
-            buffer: Default::default(),
+            buffer: [0; BYTES],
             offset: 0,
             rate,
             delim,
@@ -254,36 +264,9 @@ impl<P: Permutation> KeccakState<P> {
         }
     }
 
-    #[inline(always)]
-    fn words(&mut self) -> &mut [u64; WORDS] {
-        &mut self.buffer
-    }
-
-    #[inline(always)]
-    fn bytes(&mut self) -> &mut [u8; WORDS * 8] {
-        unsafe { core::mem::transmute(self.words()) }
-    }
-
-    #[cfg(target_endian = "little")]
     #[inline]
     fn execute<F: FnOnce(&mut [u8])>(&mut self, offset: usize, len: usize, f: F) {
-        f(&mut self.bytes()[offset..][..len]);
-    }
-
-    #[cfg(target_endian = "big")]
-    #[inline]
-    fn execute<F: FnOnce(&mut [u8])>(&mut self, offset: usize, len: usize, f: F) {
-        fn swap_endianess(buffer: &mut [u64]) {
-            for item in buffer {
-                *item = item.swap_bytes();
-            }
-        }
-
-        let start = offset / 8;
-        let end = (offset + len + 7) / 8;
-        swap_endianess(&mut self.0[start..end]);
-        f(&mut self.bytes()[offset..][..len]);
-        swap_endianess(&mut self.0[start..end]);
+        f(&mut self.buffer[offset..][..len]);
     }
 
     fn xorin(&mut self, iobuf: &[u8], p: usize, offset: usize, len: usize) {
@@ -312,7 +295,12 @@ impl<P: Permutation> KeccakState<P> {
     }
 
     fn keccak(&mut self) {
-        P::execute(&mut self.words());
+        let words: &mut [u64; WORDS] = unsafe { core::mem::transmute(&mut self.buffer) };
+        #[cfg(target_endian = "big")]
+        swap_endianess(words);
+        P::execute(words);
+        #[cfg(target_endian = "big")]
+        swap_endianess(words);
     }
 
     pub fn absorb(&mut self, input: &[u8]) {
@@ -344,7 +332,7 @@ impl<P: Permutation> KeccakState<P> {
         #[cfg(feature = "zeroize-on-drop")]
         self.buffer.zeroize();
         #[cfg(not(feature = "zeroize-on-drop"))]
-        let _ = core::mem::replace(&mut self.buffer, Default::default());
+        let _ = core::mem::replace(&mut self.buffer, [0; BYTES]);
         self.offset = 0;
         self.mode = Mode::Absorbing;
     }
