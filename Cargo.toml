@@ -11,7 +11,7 @@ description = "Core part of `tiny-keccak` as public API"
 path = "lib.rs"
 
 [dependencies]
-crunchy = "0.2.2"
+keccak = "0.1.4"
 zeroize = { version = "1", optional = true }
 
 [features]
