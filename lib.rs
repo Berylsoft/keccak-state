@@ -39,22 +39,12 @@ enum Mode {
 }
 use Mode::*;
 
+#[derive(Clone)]
 pub struct KeccakState<const P: bool, const R: usize> {
     buf: [u8; BYTES(BITS)],
     offset: usize,
     delim: u8,
     mode: Mode,
-}
-
-impl<const P: bool, const R: usize> Clone for KeccakState<P, R> {
-    fn clone(&self) -> Self {
-        KeccakState {
-            buf: self.buf.clone(),
-            offset: self.offset,
-            delim: self.delim,
-            mode: self.mode,
-        }
-    }
 }
 
 #[cfg(feature = "zeroize-on-drop")]
@@ -74,21 +64,6 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
             offset: 0,
             delim,
             mode: Absorbing,
-        }
-    }
-
-    fn switch_to_absorb(&mut self) {
-        if let Squeezing = self.mode {
-            self.mode = Absorbing;
-            self.fill_block();
-        }
-    }
-
-    fn switch_to_squeeze(&mut self) {
-        if let Absorbing = self.mode {
-            self.mode = Squeezing;
-            self.pad();
-            self.fill_block();
         }
     }
 
@@ -134,9 +109,29 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         swap_endianess(words);
     }
 
+    pub fn fill_block(&mut self) {
+        self.keccak();
+        self.offset = 0;
+    }
+
+    fn switch_to_absorb(&mut self) {
+        if let Squeezing = self.mode {
+            self.mode = Absorbing;
+            self.fill_block();
+        }
+    }
+
+    fn switch_to_squeeze(&mut self) {
+        if let Absorbing = self.mode {
+            self.mode = Squeezing;
+            self.pad();
+            self.fill_block();
+        }
+    }
+
     pub fn absorb(&mut self, input: &[u8]) {
         self.switch_to_absorb();
-        self.flodp(input.len(), |buf: &mut [u8], buf_offset: usize, iobuf_offset: usize, len: usize| {
+        self.flodp(input.len(), |buf, buf_offset, iobuf_offset, len| {
             let dst = &mut buf[buf_offset..][..len];
             let src = &input[iobuf_offset..][..len];
             for i in 0..len {
@@ -147,7 +142,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
 
     pub fn squeeze(&mut self, output: &mut [u8]) {
         self.switch_to_squeeze();
-        self.flodp(output.len(), |buf: &mut [u8], buf_offset: usize, iobuf_offset: usize, len: usize| {
+        self.flodp(output.len(), |buf, buf_offset, iobuf_offset, len| {
             let dst = &mut output[iobuf_offset..][..len];
             let src = &buf[buf_offset..][..len];
             dst.copy_from_slice(src)
@@ -156,7 +151,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
 
     pub fn squeeze_xor(&mut self, output: &mut [u8]) {
         self.switch_to_squeeze();
-        self.flodp(output.len(), |buf: &mut [u8], buf_offset: usize, iobuf_offset: usize, len: usize| {
+        self.flodp(output.len(), |buf, buf_offset, iobuf_offset, len| {
             let dst = &mut output[iobuf_offset..][..len];
             let src = &buf[buf_offset..][..len];
             for i in 0..len {
@@ -167,14 +162,9 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
 
     pub fn squeeze_skip(&mut self, len: usize) {
         self.switch_to_squeeze();
-        self.flodp(len, |_buf: &mut [u8], _buf_offset: usize, _iobuf_offset: usize, _len: usize| {
+        self.flodp(len, |_buf, _buf_offset, _iobuf_offset, _len| {
             // do nothing
         });
-    }
-
-    pub fn fill_block(&mut self) {
-        self.keccak();
-        self.offset = 0;
     }
 
     pub fn reset(&mut self) {
@@ -215,4 +205,3 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         KeccakState { buf, offset, mode, delim }
     }
 }
-
