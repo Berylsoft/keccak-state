@@ -1,13 +1,12 @@
-use keccak_core::{KeccakState, KeccakF, R256};
+use keccak_core::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE};
 
 fn cshake256_init(name: &[u8], custom_string: &[u8]) -> KeccakState<KeccakF, R256> {
-    use keccak_core::{DELIM_CSHAKE, DELIM_SHAKE};
     // if there is no name and no customization string
     // cSHAKE is SHAKE
     if name.is_empty() && custom_string.is_empty() {
-        KeccakState::init(DELIM_SHAKE)
+        KeccakState::init(DSHAKE)
     } else {
-        let mut state = KeccakState::init(DELIM_CSHAKE);
+        let mut state = KeccakState::init(DCSHAKE);
         state.absorb_len_left(R256);
         state.absorb_len_left(name.len() * 8);
         state.absorb(name);

@@ -1,19 +1,17 @@
 #![cfg_attr(not(feature = "alloc"), no_std)]
 
-use keccak_core::{KeccakState, KeccakF, R256};
+use keccak_core::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE};
 #[cfg(feature = "zeroize-on-drop")]
 use zeroize::Zeroize;
 
 fn init(name: &[u8], custom_string: &[u8]) -> KeccakState<KeccakF, R256> {
-    use keccak_core::{bits_to_rate, DELIM_CSHAKE, DELIM_SHAKE};
-    let rate = bits_to_rate(256);
     // if there is no name and no customization string
     // cSHAKE is SHAKE
     if name.is_empty() && custom_string.is_empty() {
-        KeccakState::init(DELIM_SHAKE)
+        KeccakState::init(DSHAKE)
     } else {
-        let mut ctx = KeccakState::init(DELIM_CSHAKE);
-        ctx.absorb_len_left(rate);
+        let mut ctx = KeccakState::init(DCSHAKE);
+        ctx.absorb_len_left(R256);
         ctx.absorb_len_left(name.len() * 8);
         ctx.absorb(name);
         ctx.absorb_len_left(custom_string.len() * 8);

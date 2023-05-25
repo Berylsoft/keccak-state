@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(non_upper_case_globals)]
 
 #[cfg(target_endian = "big")]
 #[inline]
@@ -157,7 +158,7 @@ enum Mode {
 pub struct KeccakState<const P: bool, const R: usize> {
     buffer: [u8; BYTES],
     offset: usize,
-    pub delim: u8,
+    delim: u8,
     mode: Mode,
 }
 
@@ -330,20 +331,23 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
             self.absorb(&[(core::mem::size_of::<usize>() as u8) - (lz as u8)]);
         }
     }
+
+    pub fn change_delim(self, delim: u8) -> Self {
+        let KeccakState { buffer, offset, mode, delim: _ } = self;
+        KeccakState { buffer, offset, mode, delim }
+    }
 }
 
 pub const fn bits_to_rate(bits: usize) -> usize {
     200 - bits / 4
 }
 
-pub const DELIM_KECCAK : u8 = 0x01;
-pub const DELIM_SHA3   : u8 = 0x06;
-pub const DELIM_SHAKE  : u8 = 0x1f;
-pub const DELIM_CSHAKE : u8 = 0x04;
+pub const DKeccak : u8 = 0x01;
+pub const DSHA3   : u8 = 0x06;
+pub const DSHAKE  : u8 = 0x1f;
+pub const DCSHAKE : u8 = 0x04;
 
-#[allow(non_upper_case_globals)]
 pub const KeccakF: bool = true;
-#[allow(non_upper_case_globals)]
 pub const KeccakP: bool = false;
 
 pub const R128: usize = bits_to_rate(128);

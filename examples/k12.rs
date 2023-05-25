@@ -99,8 +99,8 @@ impl<T: AsRef<[u8]>> KangarooTwelve<T> {
         self.update(custom_string.as_ref());
         self.update(encoded_len.value());
 
-        if self.chunks == 0 {
-            self.state.delim = 0x07;
+        let state = if self.chunks == 0 {
+            self.state.change_delim(0x07)
         } else {
             let encoded_chunks = encode_len(self.chunks);
             let mut tmp_chunk = [0u8; 32];
@@ -108,10 +108,10 @@ impl<T: AsRef<[u8]>> KangarooTwelve<T> {
             self.state.absorb(&tmp_chunk);
             self.state.absorb(encoded_chunks.value());
             self.state.absorb(&[0xff, 0xff]);
-            self.state.delim = 0x06;
-        }
+            self.state.change_delim(0x06)
+        };
 
-        KangarooTwelveXof { state: self.state }
+        KangarooTwelveXof { state }
     }
 }
 
