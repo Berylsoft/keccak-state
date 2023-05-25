@@ -67,7 +67,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         }
     }
 
-    fn flodp<F: FnMut(&mut [u8], usize, usize, usize)>(&mut self, iobuf_len: usize, mut f: F) {
+    fn fold<F: FnMut(&mut [u8], usize, usize, usize)>(&mut self, iobuf_len: usize, mut f: F) {
         let mut iobuf_offset = 0;
         let mut iobuf_rest = iobuf_len;
         let mut current_len = R - self.offset;
@@ -131,7 +131,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
 
     pub fn absorb(&mut self, input: &[u8]) {
         self.switch_to_absorb();
-        self.flodp(input.len(), |buf, buf_offset, iobuf_offset, len| {
+        self.fold(input.len(), |buf, buf_offset, iobuf_offset, len| {
             let dst = &mut buf[buf_offset..][..len];
             let src = &input[iobuf_offset..][..len];
             for i in 0..len {
@@ -142,7 +142,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
 
     pub fn squeeze(&mut self, output: &mut [u8]) {
         self.switch_to_squeeze();
-        self.flodp(output.len(), |buf, buf_offset, iobuf_offset, len| {
+        self.fold(output.len(), |buf, buf_offset, iobuf_offset, len| {
             let dst = &mut output[iobuf_offset..][..len];
             let src = &buf[buf_offset..][..len];
             dst.copy_from_slice(src)
@@ -151,7 +151,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
 
     pub fn squeeze_xor(&mut self, output: &mut [u8]) {
         self.switch_to_squeeze();
-        self.flodp(output.len(), |buf, buf_offset, iobuf_offset, len| {
+        self.fold(output.len(), |buf, buf_offset, iobuf_offset, len| {
             let dst = &mut output[iobuf_offset..][..len];
             let src = &buf[buf_offset..][..len];
             for i in 0..len {
@@ -162,7 +162,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
 
     pub fn squeeze_skip(&mut self, len: usize) {
         self.switch_to_squeeze();
-        self.flodp(len, |_buf, _buf_offset, _iobuf_offset, _len| {
+        self.fold(len, |_buf, _buf_offset, _iobuf_offset, _len| {
             // do nothing
         });
     }
