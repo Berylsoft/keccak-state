@@ -154,6 +154,7 @@ enum Mode {
     Absorbing,
     Squeezing,
 }
+use Mode::*;
 
 pub struct KeccakState<const P: bool, const R: usize> {
     buffer: [u8; BYTES],
@@ -202,8 +203,8 @@ macro_rules! flodp {
 
 macro_rules! absorb_pre {
     ($self:expr) => {{
-        if let Mode::Squeezing = $self.mode {
-            $self.mode = Mode::Absorbing;
+        if let Squeezing = $self.mode {
+            $self.mode = Absorbing;
             $self.fill_block();
         }
     }};
@@ -211,8 +212,8 @@ macro_rules! absorb_pre {
 
 macro_rules! squeeze_pre {
     ($self:expr) => {{
-        if let Mode::Absorbing = $self.mode {
-            $self.mode = Mode::Squeezing;
+        if let Absorbing = $self.mode {
+            $self.mode = Squeezing;
             $self.pad();
             $self.fill_block();
         }
@@ -227,28 +228,26 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
             buffer: [0; BYTES],
             offset: 0,
             delim,
-            mode: Mode::Absorbing,
+            mode: Absorbing,
         }
     }
 
-    #[inline]
-    fn execute<F: FnOnce(&mut [u8])>(&mut self, offset: usize, len: usize, f: F) {
-        f(&mut self.buffer[offset..][..len]);
-    }
-
     fn xorin(&mut self, iobuf: &[u8], p: usize, offset: usize, len: usize) {
+        let buf = &mut self.buffer[offset..][..len];
         let iobuf = &iobuf[p..][..len];
-        self.execute(offset, len, |buf| xor(buf, iobuf));
+        xor(buf, iobuf);
     }
 
     fn setout(&mut self, iobuf: &mut [u8], p: usize, offset: usize, len: usize) {
+        let buf = &mut self.buffer[offset..][..len];
         let iobuf = &mut iobuf[p..][..len];
-        self.execute(offset, len, |buf| <[_]>::copy_from_slice(iobuf, buf));
+        <[_]>::copy_from_slice(iobuf, buf);
     }
 
     fn xorout(&mut self, iobuf: &mut [u8], p: usize, offset: usize, len: usize) {
+        let buf = &mut self.buffer[offset..][..len];
         let iobuf = &mut iobuf[p..][..len];
-        self.execute(offset, len, |buf| xor(iobuf, buf));
+        xor(iobuf, buf);
     }
 
     #[inline(always)]
@@ -256,9 +255,8 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
     }
 
     fn pad(&mut self) {
-        let delim = self.delim;
-        self.execute(self.offset, 1, |buff| buff[0] ^= delim);
-        self.execute(R - 1, 1, |buff| buff[0] ^= 0x80);
+        self.buffer[self.offset] ^= self.delim;
+        self.buffer[R - 1] ^= 0x80;
     }
 
     fn keccak(&mut self) {
@@ -305,7 +303,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         #[cfg(not(feature = "zeroize-on-drop"))]
         let _ = core::mem::replace(&mut self.buffer, [0; BYTES]);
         self.offset = 0;
-        self.mode = Mode::Absorbing;
+        self.mode = Absorbing;
     }
 
     #[cfg(feature = "left-encode")]
