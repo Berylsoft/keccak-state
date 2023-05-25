@@ -1,29 +1,6 @@
 #![no_std]
 #![allow(non_upper_case_globals)]
 
-#[cfg(target_endian = "big")]
-#[inline]
-fn swap_endianess(words: &mut [u64; WORDS]) {
-    for item in words {
-        *item = item.swap_bytes();
-    }
-}
-
-#[inline]
-pub fn xor(dst: &mut [u8], src: &[u8]) {
-    let len = dst.len();
-
-    // Check *before* looping that both are long enough,
-    // in a way that makes it directly obvious to LLVM
-    // that the indexing below will be in-bounds.
-    // ref: https://users.rust-lang.org/t/93119/10
-    let (dst, src) = (&mut dst[..len], &src[..len]);
-
-    for i in 0..len {
-        dst[i] ^= src[i];
-    }
-}
-
 const RHO: [u32; 24] = [
     1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44,
 ];
@@ -157,7 +134,7 @@ enum Mode {
 use Mode::*;
 
 pub struct KeccakState<const P: bool, const R: usize> {
-    buffer: [u8; BYTES],
+    buf: [u8; BYTES],
     offset: usize,
     delim: u8,
     mode: Mode,
@@ -166,7 +143,7 @@ pub struct KeccakState<const P: bool, const R: usize> {
 impl<const P: bool, const R: usize> Clone for KeccakState<P, R> {
     fn clone(&self) -> Self {
         KeccakState {
-            buffer: self.buffer.clone(),
+            buf: self.buf.clone(),
             offset: self.offset,
             delim: self.delim,
             mode: self.mode,
@@ -177,47 +154,9 @@ impl<const P: bool, const R: usize> Clone for KeccakState<P, R> {
 #[cfg(feature = "zeroize-on-drop")]
 impl<const P: bool, const R: usize> Drop for KeccakState<P, R> {
     fn drop(&mut self) {
-        self.buffer.zeroize();
+        self.buf.zeroize();
         self.offset = 0;
     }
-}
-
-macro_rules! flodp {
-    ($self:expr, $iobuf:expr, $bufl:expr, $exec:ident) => {{
-        let mut p = 0;
-        let mut l = $bufl;
-        let mut rate = R - $self.offset;
-        let mut offset = $self.offset;
-        while l >= rate {
-            $self.$exec($iobuf, p, offset, rate);
-            $self.keccak();
-            p += rate;
-            l -= rate;
-            rate = R;
-            offset = 0;
-        }
-        $self.$exec($iobuf, p, offset, l);
-        $self.offset = offset + l;
-    }};
-}
-
-macro_rules! absorb_pre {
-    ($self:expr) => {{
-        if let Squeezing = $self.mode {
-            $self.mode = Absorbing;
-            $self.fill_block();
-        }
-    }};
-}
-
-macro_rules! squeeze_pre {
-    ($self:expr) => {{
-        if let Absorbing = $self.mode {
-            $self.mode = Squeezing;
-            $self.pad();
-            $self.fill_block();
-        }
-    }};
 }
 
 impl<const P: bool, const R: usize> KeccakState<P, R> {
@@ -225,45 +164,62 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         // TODO complie time
         assert!(R != 0, "rate cannot be equal 0");
         KeccakState {
-            buffer: [0; BYTES],
+            buf: [0; BYTES],
             offset: 0,
             delim,
             mode: Absorbing,
         }
     }
 
-    fn xorin(&mut self, iobuf: &[u8], p: usize, offset: usize, len: usize) {
-        let buf = &mut self.buffer[offset..][..len];
-        let iobuf = &iobuf[p..][..len];
-        xor(buf, iobuf);
+    fn switch_to_absorb(&mut self) {
+        if let Squeezing = self.mode {
+            self.mode = Absorbing;
+            self.fill_block();
+        }
     }
 
-    fn setout(&mut self, iobuf: &mut [u8], p: usize, offset: usize, len: usize) {
-        let buf = &mut self.buffer[offset..][..len];
-        let iobuf = &mut iobuf[p..][..len];
-        <[_]>::copy_from_slice(iobuf, buf);
+    fn switch_to_squeeze(&mut self) {
+        if let Absorbing = self.mode {
+            self.mode = Squeezing;
+            self.pad();
+            self.fill_block();
+        }
     }
 
-    fn xorout(&mut self, iobuf: &mut [u8], p: usize, offset: usize, len: usize) {
-        let buf = &mut self.buffer[offset..][..len];
-        let iobuf = &mut iobuf[p..][..len];
-        xor(iobuf, buf);
-    }
-
-    #[inline(always)]
-    fn skipout(&mut self, _1: &mut [u8], _2: usize, _3: usize, _4: usize) {
+    fn flodp<F: FnMut(&mut [u8], usize, usize, usize)>(&mut self, iobuf_len: usize, mut f: F) {
+        let mut iobuf_offset = 0;
+        let mut iobuf_rest = iobuf_len;
+        let mut current_len = R - self.offset;
+        let mut buf_offset = self.offset;
+        while iobuf_rest >= current_len {
+            f(&mut self.buf, buf_offset, iobuf_offset, current_len);
+            self.keccak();
+            iobuf_offset += current_len;
+            iobuf_rest -= current_len;
+            current_len = R;
+            buf_offset = 0;
+        }
+        f(&mut self.buf, buf_offset, iobuf_offset, iobuf_rest);
+        self.offset = buf_offset + iobuf_rest;
     }
 
     fn pad(&mut self) {
-        self.buffer[self.offset] ^= self.delim;
-        self.buffer[R - 1] ^= 0x80;
+        self.buf[self.offset] ^= self.delim;
+        self.buf[R - 1] ^= 0x80;
     }
 
     fn keccak(&mut self) {
-        let words: &mut [u64; WORDS] = unsafe { core::mem::transmute(&mut self.buffer) };
+        let words: &mut [u64; WORDS] = unsafe { core::mem::transmute(&mut self.buf) };
+        #[cfg(target_endian = "big")]
+        #[inline]
+        fn swap_endianess(words: &mut [u64; WORDS]) {
+            for item in words {
+                *item = item.swap_bytes();
+            }
+        }
         #[cfg(target_endian = "big")]
         swap_endianess(words);
-        if P {
+        if P == KeccakF {
             keccak::<{ KECCAK_F_RC.len() }>(words, &KECCAK_F_RC);
         } else {
             keccak::<{ KECCAK_P_RC.len() }>(words, &KECCAK_P_RC);
@@ -273,23 +229,41 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
     }
 
     pub fn absorb(&mut self, input: &[u8]) {
-        absorb_pre!(self);
-        flodp!(self, input, input.len(), xorin)
+        self.switch_to_absorb();
+        self.flodp(input.len(), |buf: &mut [u8], buf_offset: usize, iobuf_offset: usize, len: usize| {
+            let dst = &mut buf[buf_offset..][..len];
+            let src = &input[iobuf_offset..][..len];
+            for i in 0..len {
+                dst[i] ^= src[i];
+            }
+        });
     }
 
     pub fn squeeze(&mut self, output: &mut [u8]) {
-        squeeze_pre!(self);
-        flodp!(self, output, output.len(), setout)
+        self.switch_to_squeeze();
+        self.flodp(output.len(), |buf: &mut [u8], buf_offset: usize, iobuf_offset: usize, len: usize| {
+            let dst = &mut output[iobuf_offset..][..len];
+            let src = &buf[buf_offset..][..len];
+            dst.copy_from_slice(src)
+        });
     }
 
     pub fn squeeze_xor(&mut self, output: &mut [u8]) {
-        squeeze_pre!(self);
-        flodp!(self, output, output.len(), xorout)
+        self.switch_to_squeeze();
+        self.flodp(output.len(), |buf: &mut [u8], buf_offset: usize, iobuf_offset: usize, len: usize| {
+            let dst = &mut output[iobuf_offset..][..len];
+            let src = &buf[buf_offset..][..len];
+            for i in 0..len {
+                dst[i] ^= src[i];
+            }
+        });
     }
 
     pub fn squeeze_skip(&mut self, len: usize) {
-        squeeze_pre!(self);
-        flodp!(self, &mut [], len, skipout)
+        self.switch_to_squeeze();
+        self.flodp(len, |_buf: &mut [u8], _buf_offset: usize, _iobuf_offset: usize, _len: usize| {
+            // do nothing
+        });
     }
 
     pub fn fill_block(&mut self) {
@@ -299,7 +273,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
 
     pub fn reset(&mut self) {
         #[cfg(feature = "zeroize-on-drop")]
-        self.buffer.zeroize();
+        self.buf.zeroize();
         #[cfg(not(feature = "zeroize-on-drop"))]
         let _ = core::mem::replace(&mut self.buffer, [0; BYTES]);
         self.offset = 0;
@@ -331,8 +305,8 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
     }
 
     pub fn change_delim(self, delim: u8) -> Self {
-        let KeccakState { buffer, offset, mode, delim: _ } = self;
-        KeccakState { buffer, offset, mode, delim }
+        let KeccakState { buf, offset, mode, delim: _ } = self;
+        KeccakState { buf, offset, mode, delim }
     }
 }
 
