@@ -1,0 +1,20 @@
+[package]
+name = "keccak-state"
+version = "0.1.0"
+edition = "2021"
+authors = ["debris <marek.kotewicz@gmail.com>", "stackinspector"]
+license = "MPL-2.0"
+repository = "https://github.com/Berylsoft/keccak-state"
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+keccak = "0.1.4"
+zeroize = { version = "1", optional = true }
+
+[features]
+default = []
+left-encode = []
+right-encode = []
+zeroize-on-drop = ["zeroize"]

@@ -4,17 +4,17 @@ version = "0.1.0"
 edition = "2021"
 authors = ["stackinspector"]
 license = "MPL-2.0"
-repository = "https://github.com/Berylsoft/keccak-core"
+repository = "https://github.com/Berylsoft/keccak-state"
 
 [lib]
 path = "lib.rs"
 
 [dependencies]
 zeroize = { version = "1", optional = true }
-keccak-core = { path = "../", features = ["zeroize-on-drop", "left-encode"] }
+keccak-state = { path = "../keccak-state", features = ["zeroize-on-drop", "left-encode"] }
 getrandom = { version = "0.2", optional = true }
 
 [features]
 alloc = []
-zeroize-on-drop = ["zeroize", "keccak-core/zeroize-on-drop"]
+zeroize-on-drop = ["zeroize", "keccak-state/zeroize-on-drop"]
 rand = ["alloc", "getrandom"]

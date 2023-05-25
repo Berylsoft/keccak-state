@@ -1,35 +1,3 @@
-[package]
-name = "keccak-core"
-version = "2.0.2" # tiny-keccak@f0fa146
-edition = "2021"
-authors = ["debris <marek.kotewicz@gmail.com>", "stackinspector"]
-license = "CC0-1.0"
-repository = "https://github.com/Berylsoft/keccak-core"
-description = "Core part of `tiny-keccak` as public API"
-
-[lib]
-path = "lib.rs"
-
-[dependencies]
-keccak = "0.1.4"
-zeroize = { version = "1", optional = true }
-
-[features]
-left-encode = []
-right-encode = []
-zeroize-on-drop = ["zeroize"]
-
-[[example]]
-name = "cshake"
-required-features = ["zeroize-on-drop", "left-encode"]
-
-[[example]]
-name = "k12"
-
-[dev-dependencies]
-tiny-keccak = { version = "2", features = ["cshake", "k12"] }
-getrandom = "0.2"
-
 [profile.dev]
 opt-level = 3  # Controls the --opt-level the compiler builds with
 debug = false   # Controls whether the compiler passes `-g`
@@ -41,5 +9,6 @@ debug = false   # Controls whether the compiler passes `-g`
 [workspace]
 resolver = "2"
 members = [
+    "keccak-state",
     "cshake",
 ]

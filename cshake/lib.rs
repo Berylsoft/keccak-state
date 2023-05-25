@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "alloc"), no_std)]
 
-use keccak_core::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE};
+use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE};
 #[cfg(feature = "zeroize-on-drop")]
 use zeroize::Zeroize;
 
@@ -192,5 +192,9 @@ pub mod rand {
             let ctx = unsafe { &mut *self.0.get() };
             ctx.squeeze(output);
         }
+    }
+
+    pub fn random_array<const N: usize>() -> [u8; N] {
+        thread_rng().squeeze_to_array()
     }
 }
