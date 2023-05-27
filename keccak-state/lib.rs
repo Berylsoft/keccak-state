@@ -170,7 +170,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         #[cfg(feature = "zeroize-on-drop")]
         self.buf.zeroize();
         #[cfg(not(feature = "zeroize-on-drop"))]
-        let _ = core::mem::replace(&mut self.buffer, [0; BYTES(BITS)]);
+        let _ = core::mem::replace(&mut self.buf, [0; BYTES(BITS)]);
         self.offset = 0;
         self.mode = Absorbing;
     }
