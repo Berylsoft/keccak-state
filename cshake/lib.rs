@@ -192,24 +192,34 @@ pub mod rand {
 
     pub struct ReseedableRng<C: CShakeCustom, const I: usize, const L: usize> {
         ctx: CShake<C>,
-        remain: usize,
+        offset: usize,
     }
 
     impl<C: CShakeCustom, const I: usize, const L: usize> ReseedableRng<C, I, L> {
         pub fn init(custom: C) -> Self {
             let mut ctx = custom.create();
             ctx.absorb_seed::<L>();
-            ReseedableRng { ctx, remain: I }
+            ReseedableRng { ctx, offset: 0 }
         }
     }
 
     impl<C: CShakeCustom, const I: usize, const L: usize> Squeeze for ReseedableRng<C, I, L> {
+        // from KeccakState::fold
         fn squeeze(&mut self, output: &mut [u8]) {
-            self.ctx.squeeze(output);
-            self.remain -= output.len();
-            if self.remain == 0 {
+            let mut iobuf_offset = 0;
+            let mut iobuf_rest = output.len();
+            let mut current_len = I - self.offset;
+            let mut buf_offset = self.offset;
+            while iobuf_rest >= current_len {
+                self.ctx.squeeze(&mut output[iobuf_offset..][..current_len]);
                 self.reset();
+                iobuf_offset += current_len;
+                iobuf_rest -= current_len;
+                current_len = I;
+                buf_offset = 0;
             }
+            self.ctx.squeeze(&mut output[iobuf_offset..][..iobuf_rest]);
+            self.offset = buf_offset + iobuf_rest;
         }
     }
 
@@ -217,7 +227,7 @@ pub mod rand {
         fn reset(&mut self) {
             self.ctx.reset();
             self.ctx.absorb_seed::<L>();
-            self.remain = I;
+            self.offset = 0;
         }
     }
 
