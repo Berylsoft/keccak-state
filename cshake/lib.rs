@@ -144,6 +144,14 @@ impl<C: CShakeCustom> CShake<C> {
         buf.zeroize();
         ctx
     }
+
+    #[cfg(feature = "seed")]
+    pub fn absorb_seed<const N: usize>(&mut self) {
+        use core::mem::MaybeUninit;
+        let mut buf: [MaybeUninit<u8>; N] = unsafe { MaybeUninit::uninit().assume_init() };
+        let ready_buf = getrandom::getrandom_uninit(&mut buf).unwrap();
+        self.absorb(ready_buf);
+    }
 }
 
 pub trait CShakeCustom: Sized {
@@ -180,53 +188,88 @@ macro_rules! cshake_customs {
 
 #[cfg(feature = "rand")]
 pub mod rand {
-    use std::{thread_local, rc::Rc, cell::UnsafeCell, mem::MaybeUninit};
-    use crate::{CShake, Absorb, Squeeze, CShakeCustom, NoCustom, Reset};
+    use crate::{CShake, Squeeze, Reset, CShakeCustom};
 
-    #[must_use]
-    #[inline(always)]
-    pub const fn uninit_array<T, const N: usize>() -> [MaybeUninit<T>; N] {
-        // SAFETY: An uninitialized `[MaybeUninit<_>; LEN]` is valid.
-        unsafe { MaybeUninit::<[MaybeUninit<T>; N]>::uninit().assume_init() }
+    pub struct ReseedableRng<C: CShakeCustom, const I: usize, const L: usize> {
+        ctx: CShake<C>,
+        remain: usize,
     }
 
-    fn seed(ctx: &mut CShake<NoCustom>) {
-        let mut buf = uninit_array::<u8, 32>();
-        let ready_buf = getrandom::getrandom_uninit(&mut buf).unwrap();
-        ctx.absorb(ready_buf);
+    impl<C: CShakeCustom, const I: usize, const L: usize> ReseedableRng<C, I, L> {
+        pub fn init(custom: C) -> Self {
+            let mut ctx = custom.create();
+            ctx.absorb_seed::<L>();
+            ReseedableRng { ctx, remain: I }
+        }
     }
 
-    thread_local! {
-        static THREAD_RNG: Rc<UnsafeCell<CShake<NoCustom>>> = Rc::new(UnsafeCell::new({
-            let mut ctx = NoCustom.create();
-            seed(&mut ctx);
-            ctx
-        }));
-    }
-
-    pub struct ThreadRng(Rc<UnsafeCell<CShake<NoCustom>>>);
-
-    pub fn thread_rng() -> ThreadRng {
-        ThreadRng(THREAD_RNG.with(Clone::clone))
-    }
-
-    impl Squeeze for ThreadRng {
-        #[inline(always)]
+    impl<C: CShakeCustom, const I: usize, const L: usize> Squeeze for ReseedableRng<C, I, L> {
         fn squeeze(&mut self, output: &mut [u8]) {
-            let ctx = unsafe { &mut *self.0.get() };
-            ctx.squeeze(output);
+            self.ctx.squeeze(output);
+            self.remain -= output.len();
+            if self.remain == 0 {
+                self.reset();
+            }
         }
     }
 
-    impl Reset for ThreadRng {
+    impl<C: CShakeCustom, const I: usize, const L: usize> Reset for ReseedableRng<C, I, L> {
         fn reset(&mut self) {
-            let ctx = unsafe { &mut *self.0.get() };
-            ctx.reset();
-            seed(ctx);
+            self.ctx.reset();
+            self.ctx.absorb_seed::<L>();
+            self.remain = I;
         }
     }
 
-    pub fn random_array<const N: usize>() -> [u8; N] {
-        thread_rng().squeeze_to_array()
+    pub const DEFAULT_RESEED_INTERVAL: usize = 1024 * 64;
+    pub const DEFAULT_SEED_LEN: usize = 32;
+
+    #[cfg(feature = "alloc")]
+    mod thread {
+        use std::{thread_local, rc::Rc, cell::UnsafeCell};
+        use crate::{Squeeze, Reset, NoCustom};
+        use super::{ReseedableRng, DEFAULT_RESEED_INTERVAL, DEFAULT_SEED_LEN};
+
+        type ThreadRngState = ReseedableRng<NoCustom, DEFAULT_RESEED_INTERVAL, DEFAULT_SEED_LEN>;
+
+        thread_local! {
+            static THREAD_RNG: Rc<UnsafeCell<ThreadRngState>> = Rc::new(UnsafeCell::new(ReseedableRng::init(NoCustom)));
+        }
+
+        pub struct ThreadRng(Rc<UnsafeCell<ThreadRngState>>);
+
+        pub fn thread_rng() -> ThreadRng {
+            ThreadRng(THREAD_RNG.with(Clone::clone))
+        }
+
+        impl ThreadRng {
+            #[inline(always)]
+            fn get_mut(&self) -> &mut ThreadRngState {
+                unsafe { &mut *self.0.get() }
+            }
+        }
+
+        impl Squeeze for ThreadRng {
+            #[inline(always)]
+            fn squeeze(&mut self, output: &mut [u8]) {
+                let ctx = self.get_mut();
+                ctx.squeeze(output);
+            }
+        }
+
+        impl Reset for ThreadRng {
+            #[inline(always)]
+            fn reset(&mut self) {
+                let ctx = self.get_mut();
+                ctx.reset();
+            }
+        }
+
+        pub fn random_array<const N: usize>() -> [u8; N] {
+            thread_rng().squeeze_to_array()
+        }
     }
+
+    #[cfg(feature = "alloc")]
+    pub use thread::*;
 }

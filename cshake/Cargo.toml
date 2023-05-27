@@ -17,4 +17,5 @@ getrandom = { version = "0.2", optional = true }
 [features]
 alloc = []
 zeroize-on-drop = ["zeroize", "keccak-state/zeroize-on-drop"]
-rand = ["alloc", "getrandom"]
+seed = ["getrandom"]
+rand = ["seed"]
