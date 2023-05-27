@@ -73,8 +73,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         let mut current_len = R - self.offset;
         while iobuf_rest >= current_len {
             f(&mut self.buf, self.offset, iobuf_offset, current_len);
-            self.keccak();
-            self.offset = 0;
+            self.permute();
             iobuf_offset += current_len;
             iobuf_rest -= current_len;
             current_len = R;
@@ -88,7 +87,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         self.buf[R - 1] ^= 0x80;
     }
 
-    fn keccak(&mut self) {
+    fn permute(&mut self) {
         let words: &mut [u64; WORDS(BITS)] = unsafe { core::mem::transmute(&mut self.buf) };
         #[cfg(target_endian = "big")]
         #[inline]
@@ -106,11 +105,11 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         }
         #[cfg(target_endian = "big")]
         swap_endianess(words);
+        self.offset = 0;
     }
 
     pub fn fill_block(&mut self) {
-        self.keccak();
-        self.offset = 0;
+        self.permute();
     }
 
     fn switch_to_absorb(&mut self) {
