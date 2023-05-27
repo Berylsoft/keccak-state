@@ -1,8 +1,12 @@
 #![cfg_attr(not(feature = "alloc"), no_std)]
 
-use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE};
+pub use keccak_state;
+use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE, BYTES, BITS};
 #[cfg(feature = "zeroize-on-drop")]
 use zeroize::Zeroize;
+
+const P: bool = KeccakF;
+const R: usize = R256;
 
 pub trait Absorb: Sized {
     fn absorb(&mut self, input: &[u8]);
@@ -67,7 +71,7 @@ pub trait Reset {
 }
 
 pub struct CShake<C: CShakeCustom> {
-    ctx: KeccakState<KeccakF, R256>,
+    ctx: KeccakState<P, R>,
     custom: C,
 }
 
@@ -79,7 +83,7 @@ impl<C: CShakeCustom> CShake<C> {
 
     fn init(&mut self) {
         if !C::is_empty() {
-            self.ctx.absorb_len_left(R256);
+            self.ctx.absorb_len_left(R);
             self.ctx.absorb_len_left(C::NAME.len() * 8);
             self.ctx.absorb(C::NAME.as_bytes());
             self.ctx.absorb_len_left(C::CUSTOM_STRING.len() * 8);
@@ -88,11 +92,12 @@ impl<C: CShakeCustom> CShake<C> {
         }
     }
 
+    pub fn create_with_initial(custom: C, initial: [u8; BYTES(BITS)]) -> Self {
+        CShake { ctx: KeccakState::with_initial(C::delim(), initial), custom }
+    }
+
     pub fn create(custom: C) -> CShake<C> {
-        // if there is no name and no customization string
-        // cSHAKE is SHAKE
-        let delim = if C::is_empty() { DSHAKE } else { DCSHAKE };
-        let mut _self = CShake { ctx: KeccakState::init(delim), custom };
+        let mut _self = CShake { ctx: KeccakState::new(C::delim()), custom };
         _self.init();
         _self
     }
@@ -155,14 +160,25 @@ impl<C: CShakeCustom> CShake<C> {
 pub trait CShakeCustom: Sized {
     const NAME: &'static str = "";
     const CUSTOM_STRING: &'static str;
+    const INITIAL: Option<&'static [u8; BYTES(BITS)]> = None;
 
     /* const */ fn is_empty() -> bool {
         Self::NAME.is_empty() && Self::CUSTOM_STRING.is_empty()
     }
 
+    /* const */ fn delim() -> u8 {
+        // if there is no name and no customization string
+        // cSHAKE is SHAKE
+        if Self::is_empty() { DSHAKE } else { DCSHAKE }
+    }
+
     #[inline]
     fn create(self) -> CShake<Self> {
-        CShake::create(self)
+        if let Some(initial) = Self::INITIAL {
+            CShake::create_with_initial(self, *initial)
+        } else {
+            CShake::create(self)
+        }
     }
 }
 

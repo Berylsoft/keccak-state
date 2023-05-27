@@ -1,7 +1,7 @@
 #![no_std]
 #![allow(non_upper_case_globals, non_snake_case)]
 
-const BITS: usize = 1600;
+pub const BITS: usize = 1600;
 
 pub const fn WORDS(bits: usize) -> usize {
     bits / 64
@@ -56,14 +56,26 @@ impl<const P: bool, const R: usize> Drop for KeccakState<P, R> {
 }
 
 impl<const P: bool, const R: usize> KeccakState<P, R> {
-    pub fn init(delim: u8) -> Self {
+    pub fn with_initial(delim: u8, buf: [u8; BYTES(BITS)]) -> Self {
         // TODO complie time
         assert!(R != 0, "rate cannot be equal 0");
         KeccakState {
-            buf: [0; BYTES(BITS)],
+            buf,
             offset: 0,
             delim,
             mode: Absorbing,
+        }
+    }
+
+    pub fn new(delim: u8) -> Self {
+        Self::with_initial(delim, [0; BYTES(BITS)])
+    }
+
+    pub fn to_initial(self) -> Option<[u8; BYTES(BITS)]> {
+        if self.offset == 0 && matches!(self.mode, Absorbing) {
+            Some(self.buf)
+        } else {
+            None
         }
     }
 
