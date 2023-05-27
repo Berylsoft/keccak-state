@@ -79,13 +79,11 @@ impl<C: CShakeCustom> CShake<C> {
 
     fn init(&mut self) {
         if !C::is_empty() {
-            let name = C::NAME.unwrap_or("").as_bytes();
-            let custom_string = C::CUSTOM_STRING.as_bytes();
             self.ctx.absorb_len_left(R256);
-            self.ctx.absorb_len_left(name.len() * 8);
-            self.ctx.absorb(name);
-            self.ctx.absorb_len_left(custom_string.len() * 8);
-            self.ctx.absorb(custom_string);
+            self.ctx.absorb_len_left(C::NAME.len() * 8);
+            self.ctx.absorb(C::NAME.as_bytes());
+            self.ctx.absorb_len_left(C::CUSTOM_STRING.len() * 8);
+            self.ctx.absorb(C::CUSTOM_STRING.as_bytes());
             self.ctx.fill_block();
         }
     }
@@ -155,11 +153,11 @@ impl<C: CShakeCustom> CShake<C> {
 }
 
 pub trait CShakeCustom: Sized {
-    const NAME: Option<&'static str> = None;
+    const NAME: &'static str = "";
     const CUSTOM_STRING: &'static str;
 
     /* const */ fn is_empty() -> bool {
-        Self::NAME.map_or(false, |s| s.is_empty()) && Self::CUSTOM_STRING.is_empty()
+        Self::NAME.is_empty() && Self::CUSTOM_STRING.is_empty()
     }
 
     #[inline]
