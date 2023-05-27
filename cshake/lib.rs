@@ -4,23 +4,6 @@ use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE};
 #[cfg(feature = "zeroize-on-drop")]
 use zeroize::Zeroize;
 
-fn init(name: &[u8], custom_string: &[u8]) -> KeccakState<KeccakF, R256> {
-    // if there is no name and no customization string
-    // cSHAKE is SHAKE
-    if name.is_empty() && custom_string.is_empty() {
-        KeccakState::init(DSHAKE)
-    } else {
-        let mut ctx = KeccakState::init(DCSHAKE);
-        ctx.absorb_len_left(R256);
-        ctx.absorb_len_left(name.len() * 8);
-        ctx.absorb(name);
-        ctx.absorb_len_left(custom_string.len() * 8);
-        ctx.absorb(custom_string);
-        ctx.fill_block();
-        ctx
-    }
-}
-
 pub trait Absorb: Sized {
     fn absorb(&mut self, input: &[u8]);
     
@@ -78,9 +61,43 @@ pub trait Once: Absorb + Squeeze {
 }
 
 impl<T: Absorb + Squeeze> Once for T {}
+
+pub trait Reset {
+    fn reset(&mut self);
+}
+
 pub struct CShake<C: CShakeCustom> {
     ctx: KeccakState<KeccakF, R256>,
     custom: C,
+}
+
+impl<C: CShakeCustom> CShake<C> {
+    #[inline(always)]
+    pub fn custom(&self) -> &C {
+        &self.custom
+    }
+
+    fn init(&mut self) {
+        if !C::is_empty() {
+            let name = C::NAME.unwrap_or("").as_bytes();
+            let custom_string = C::CUSTOM_STRING.as_bytes();
+            self.ctx.absorb_len_left(R256);
+            self.ctx.absorb_len_left(name.len() * 8);
+            self.ctx.absorb(name);
+            self.ctx.absorb_len_left(custom_string.len() * 8);
+            self.ctx.absorb(custom_string);
+            self.ctx.fill_block();
+        }
+    }
+
+    pub fn create(custom: C) -> CShake<C> {
+        // if there is no name and no customization string
+        // cSHAKE is SHAKE
+        let delim = if C::is_empty() { DSHAKE } else { DCSHAKE };
+        let mut _self = CShake { ctx: KeccakState::init(delim), custom };
+        _self.init();
+        _self
+    }
 }
 
 impl<C: CShakeCustom> Absorb for CShake<C> {
@@ -111,12 +128,14 @@ impl<C: CShakeCustom> SqueezeSkip for CShake<C> {
     }
 }
 
-impl<C: CShakeCustom> CShake<C> {
-    #[inline(always)]
-    pub fn custom(&self) -> &C {
-        &self.custom
+impl<C: CShakeCustom> Reset for CShake<C> {
+    fn reset(&mut self) {
+        self.ctx.reset();
+        self.init();
     }
+}
 
+impl<C: CShakeCustom> CShake<C> {
     pub fn squeeze_to_ctx<const N: usize, C2: CShakeCustom>(&mut self, custom: C2) -> CShake<C2> {
         #[allow(unused_mut)]
         let mut buf = self.squeeze_to_array::<N>();
@@ -128,14 +147,16 @@ impl<C: CShakeCustom> CShake<C> {
 }
 
 pub trait CShakeCustom: Sized {
+    const NAME: Option<&'static str> = None;
     const CUSTOM_STRING: &'static str;
+
+    /* const */ fn is_empty() -> bool {
+        Self::NAME.map_or(false, |s| s.is_empty()) && Self::CUSTOM_STRING.is_empty()
+    }
 
     #[inline]
     fn create(self) -> CShake<Self> {
-        CShake {
-            ctx: init(&[], Self::CUSTOM_STRING.as_bytes()),
-            custom: self,
-        }
+        CShake::create(self)
     }
 }
 
@@ -160,7 +181,7 @@ macro_rules! cshake_customs {
 #[cfg(feature = "rand")]
 pub mod rand {
     use std::{thread_local, rc::Rc, cell::UnsafeCell, mem::MaybeUninit};
-    use crate::{CShake, Absorb, Squeeze, CShakeCustom, NoCustom};
+    use crate::{CShake, Absorb, Squeeze, CShakeCustom, NoCustom, Reset};
 
     #[must_use]
     #[inline(always)]
@@ -169,15 +190,18 @@ pub mod rand {
         unsafe { MaybeUninit::<[MaybeUninit<T>; N]>::uninit().assume_init() }
     }
 
-    fn init() -> CShake<NoCustom> {
+    fn seed(ctx: &mut CShake<NoCustom>) {
         let mut buf = uninit_array::<u8, 32>();
         let ready_buf = getrandom::getrandom_uninit(&mut buf).unwrap();
-        let ctx = NoCustom.create().chain_absorb(&ready_buf);
-        ctx
+        ctx.absorb(ready_buf);
     }
 
     thread_local! {
-        static THREAD_RNG: Rc<UnsafeCell<CShake<NoCustom>>> = Rc::new(UnsafeCell::new(init()));
+        static THREAD_RNG: Rc<UnsafeCell<CShake<NoCustom>>> = Rc::new(UnsafeCell::new({
+            let mut ctx = NoCustom.create();
+            seed(&mut ctx);
+            ctx
+        }));
     }
 
     pub struct ThreadRng(Rc<UnsafeCell<CShake<NoCustom>>>);
@@ -191,6 +215,14 @@ pub mod rand {
         fn squeeze(&mut self, output: &mut [u8]) {
             let ctx = unsafe { &mut *self.0.get() };
             ctx.squeeze(output);
+        }
+    }
+
+    impl Reset for ThreadRng {
+        fn reset(&mut self) {
+            let ctx = unsafe { &mut *self.0.get() };
+            ctx.reset();
+            seed(ctx);
         }
     }
 
