@@ -209,17 +209,15 @@ pub mod rand {
             let mut iobuf_offset = 0;
             let mut iobuf_rest = output.len();
             let mut current_len = I - self.offset;
-            let mut buf_offset = self.offset;
             while iobuf_rest >= current_len {
                 self.ctx.squeeze(&mut output[iobuf_offset..][..current_len]);
                 self.reset();
                 iobuf_offset += current_len;
                 iobuf_rest -= current_len;
                 current_len = I;
-                buf_offset = 0;
             }
             self.ctx.squeeze(&mut output[iobuf_offset..][..iobuf_rest]);
-            self.offset = buf_offset + iobuf_rest;
+            self.offset += iobuf_rest;
         }
     }
 

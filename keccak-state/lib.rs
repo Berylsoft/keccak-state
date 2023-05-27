@@ -71,17 +71,16 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         let mut iobuf_offset = 0;
         let mut iobuf_rest = iobuf_len;
         let mut current_len = R - self.offset;
-        let mut buf_offset = self.offset;
         while iobuf_rest >= current_len {
-            f(&mut self.buf, buf_offset, iobuf_offset, current_len);
+            f(&mut self.buf, self.offset, iobuf_offset, current_len);
             self.keccak();
+            self.offset = 0;
             iobuf_offset += current_len;
             iobuf_rest -= current_len;
             current_len = R;
-            buf_offset = 0;
         }
-        f(&mut self.buf, buf_offset, iobuf_offset, iobuf_rest);
-        self.offset = buf_offset + iobuf_rest;
+        f(&mut self.buf, self.offset, iobuf_offset, iobuf_rest);
+        self.offset += iobuf_rest;
     }
 
     fn pad(&mut self) {
