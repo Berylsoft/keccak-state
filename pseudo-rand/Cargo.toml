@@ -10,4 +10,4 @@ repository = "https://github.com/Berylsoft/keccak-state"
 path = "lib.rs"
 
 [dependencies]
-cshake = { path = "../cshake", features = ["zeroize-on-drop", "rand"] }
+cshake = { path = "../cshake", features = ["zeroize-on-drop", "alloc", "rand"] }
