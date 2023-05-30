@@ -265,25 +265,24 @@ pub mod rand {
         }
 
         impl ThreadRng {
+            // SAFETY: usage should be controlled to avoid aliasing mutable references
             #[inline(always)]
-            fn get_mut(&self) -> &mut ThreadRngState {
-                unsafe { &mut *self.0.get() }
+            unsafe fn get_mut(&self) -> &mut ThreadRngState {
+                &mut *self.0.get()
             }
         }
 
         impl Squeeze for ThreadRng {
             #[inline(always)]
             fn squeeze(&mut self, output: &mut [u8]) {
-                let ctx = self.get_mut();
-                ctx.squeeze(output);
+                unsafe { self.get_mut() }.squeeze(output)
             }
         }
 
         impl Reset for ThreadRng {
             #[inline(always)]
             fn reset(&mut self) {
-                let ctx = self.get_mut();
-                ctx.reset();
+                unsafe { self.get_mut() }.reset()
             }
         }
 
