@@ -9,6 +9,7 @@ debug = false   # Controls whether the compiler passes `-g`
 [workspace]
 resolver = "2"
 members = [
+    "foldable",
     "keccak-state",
     "cshake",
     "pseudo-rand",
