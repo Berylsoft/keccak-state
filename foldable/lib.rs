@@ -1,3 +1,6 @@
+#[cfg(feature = "zeroize-on-drop")]
+use zeroize::Zeroize;
+
 type Operator = fn(&mut [u8], &[u8], usize);
 
 pub fn xor(dst: &mut [u8], src: &[u8], len: usize) {
@@ -67,7 +70,23 @@ impl<const L: usize, const R: usize, P> Default for FoldableBuffer<L, R, P> {
     }
 }
 
+#[cfg(feature = "zeroize-on-drop")]
+impl<const L: usize, const R: usize, P> Drop for FoldableBuffer<L, R, P> {
+    fn drop(&mut self) {
+        self.buf.zeroize();
+        self.offset = 0;
+    }
+}
+
 impl<const L: usize, const R: usize, P: Permute<L>> FoldableBuffer<L, R, P> {
+    pub fn reset(&mut self) {
+        #[cfg(feature = "zeroize-on-drop")]
+        self.buf.zeroize();
+        #[cfg(not(feature = "zeroize-on-drop"))]
+        let _ = core::mem::replace(&mut self.buf, [0; L]);
+        self.offset = 0;
+    }
+
     pub fn fold(&mut self, mut iobuf: IOBuf) {
         let mut iobuf_offset = 0;
         let mut iobuf_rest = iobuf.len();
