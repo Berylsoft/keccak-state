@@ -32,19 +32,15 @@ pub const DCSHAKE : u8 = 0x04;
 #[cfg(feature = "zeroize-on-drop")]
 use zeroize::Zeroize;
 
-#[derive(Clone, Copy)]
-enum Mode {
-    Absorbing,
-    Squeezing,
-}
-use Mode::*;
+pub const Absorbing: bool = true;
+pub const Squeezing: bool = false;
 
 #[derive(Clone)]
 pub struct KeccakState<const P: bool, const R: usize> {
     buf: [u8; BYTES(BITS)],
     offset: usize,
     delim: u8,
-    mode: Mode,
+    mode: bool,
 }
 
 #[cfg(feature = "zeroize-on-drop")]
@@ -124,23 +120,22 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         self.permute();
     }
 
-    fn switch_to_absorb(&mut self) {
-        if let Squeezing = self.mode {
-            self.mode = Absorbing;
-            self.fill_block();
+    fn switch<const M: bool>(&mut self) {
+        match (self.mode, M) {
+            (Absorbing, Squeezing) => {
+                self.pad();
+                self.fill_block();
+            },
+            (Squeezing, Absorbing) => {
+                self.fill_block();
+            },
+            _ => {},
         }
-    }
-
-    fn switch_to_squeeze(&mut self) {
-        if let Absorbing = self.mode {
-            self.mode = Squeezing;
-            self.pad();
-            self.fill_block();
-        }
+        self.mode = M;
     }
 
     pub fn absorb(&mut self, input: &[u8]) {
-        self.switch_to_absorb();
+        self.switch::<Absorbing>();
         self.fold(input.len(), |buf, buf_offset, iobuf_offset, len| {
             let dst = &mut buf[buf_offset..][..len];
             let src = &input[iobuf_offset..][..len];
@@ -151,7 +146,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
     }
 
     pub fn squeeze(&mut self, output: &mut [u8]) {
-        self.switch_to_squeeze();
+        self.switch::<Squeezing>();
         self.fold(output.len(), |buf, buf_offset, iobuf_offset, len| {
             let dst = &mut output[iobuf_offset..][..len];
             let src = &buf[buf_offset..][..len];
@@ -160,7 +155,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
     }
 
     pub fn squeeze_xor(&mut self, output: &mut [u8]) {
-        self.switch_to_squeeze();
+        self.switch::<Squeezing>();
         self.fold(output.len(), |buf, buf_offset, iobuf_offset, len| {
             let dst = &mut output[iobuf_offset..][..len];
             let src = &buf[buf_offset..][..len];
@@ -171,7 +166,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
     }
 
     pub fn squeeze_skip(&mut self, len: usize) {
-        self.switch_to_squeeze();
+        self.switch::<Squeezing>();
         self.fold(len, |_buf, _buf_offset, _iobuf_offset, _len| {
             // do nothing
         });
