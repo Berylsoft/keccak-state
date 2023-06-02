@@ -232,7 +232,7 @@ pub mod rand {
 
     impl<C: CShakeCustom, const R: usize, const L: usize> Squeeze for ReseedableRng<C, R, L> {
         fn squeeze(&mut self, output: &mut [u8]) {
-            self.offset = self.fold(self.offset, IOBuf::Out(output, copy));
+            self.offset = IOBuf::Out(output, copy).fold(self, self.offset);
         }
     }
 

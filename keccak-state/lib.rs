@@ -130,22 +130,22 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
 
     pub fn absorb(&mut self, input: &[u8]) {
         self.switch::<Absorbing>();
-        self.offset = self.fold(self.offset, IOBuf::In(input, xor));
+        self.offset = IOBuf::In(input, xor).fold(self, self.offset);
     }
 
     pub fn squeeze(&mut self, output: &mut [u8]) {
         self.switch::<Squeezing>();
-        self.offset = self.fold(self.offset, IOBuf::Out(output, copy));
+        self.offset = IOBuf::Out(output, copy).fold(self, self.offset);
     }
 
     pub fn squeeze_xor(&mut self, output: &mut [u8]) {
         self.switch::<Squeezing>();
-        self.offset = self.fold(self.offset, IOBuf::Out(output, xor));
+        self.offset = IOBuf::Out(output, xor).fold(self, self.offset);
     }
 
     pub fn squeeze_skip(&mut self, len: usize) {
         self.switch::<Squeezing>();
-        self.offset = self.fold(self.offset, IOBuf::Skip(len));
+        self.offset = IOBuf::Skip(len).fold(self, self.offset);
     }
 
     pub fn reset(&mut self) {

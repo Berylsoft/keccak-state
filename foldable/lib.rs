@@ -44,6 +44,22 @@ impl<'io> IOBuf<'io> {
             IOBuf::Skip(_) => {},
         }
     }
+
+    pub fn fold<const L: usize, const R: usize, F: Foldable<L, R>>(mut self, foldable: &mut F, mut offset: usize) -> usize {
+        let mut iobuf_offset = 0;
+        let mut iobuf_rest = self.len();
+        let mut current_len = R - offset;
+        while iobuf_rest >= current_len {
+            self.exec(&mut foldable.buf_mut()[offset..], iobuf_offset, current_len);
+            foldable.permute();
+            offset = 0;
+            iobuf_offset += current_len;
+            iobuf_rest -= current_len;
+            current_len = R;
+        }
+        self.exec(&mut foldable.buf_mut()[offset..], iobuf_offset, iobuf_rest);
+        offset + iobuf_rest
+    }
 }
 
 pub trait Permute {
@@ -52,23 +68,4 @@ pub trait Permute {
 
 pub trait Foldable<const L: usize, const R: usize>: Permute {
     fn buf_mut(&mut self) -> &mut [u8; L];
-
-    fn fold(&mut self, mut offset: usize, mut iobuf: IOBuf) -> usize {
-        let mut iobuf_offset = 0;
-        let mut iobuf_rest = iobuf.len();
-        let mut current_len = R - offset;
-        while iobuf_rest >= current_len {
-            iobuf.exec(&mut self.buf_mut()[offset..], iobuf_offset, current_len);
-            self.permute();
-            offset = 0;
-            iobuf_offset += current_len;
-            iobuf_rest -= current_len;
-            current_len = R;
-        }
-        iobuf.exec(&mut self.buf_mut()[offset..], iobuf_offset, iobuf_rest);
-        offset + iobuf_rest
-    }
-
-    // pub fn pipe_fold<const L2: usize, const R2: usize, P2: Permute<L2>>(&mut self, len: usize, other: &mut FoldableBuffer<L2, R2, P2>, in_f: Operator, out_f: Operator) {
-    // }
 }
