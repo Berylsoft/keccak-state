@@ -21,6 +21,7 @@ pub const fn bits_to_rate(bits: usize) -> usize {
 pub const R128: usize = bits_to_rate(128);
 pub const R224: usize = bits_to_rate(224);
 pub const R256: usize = bits_to_rate(256);
+pub const R288: usize = bits_to_rate(288);
 pub const R384: usize = bits_to_rate(384);
 pub const R512: usize = bits_to_rate(512);
 
