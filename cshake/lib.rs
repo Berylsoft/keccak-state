@@ -203,8 +203,7 @@ macro_rules! cshake_customs {
 #[cfg(feature = "rand")]
 pub mod rand {
     use foldable::*;
-    use keccak_state::{BITS, BYTES};
-    use crate::{CShake, Squeeze, Reset, CShakeCustom};
+    use crate::{BITS, BYTES, CShake, Squeeze, Reset, CShakeCustom};
 
     pub struct ReseedableRng<C: CShakeCustom, const R: usize, const L: usize> {
         ctx: CShake<C>,
@@ -227,6 +226,7 @@ pub mod rand {
     }
 
     impl<C: CShakeCustom, const R: usize, const L: usize> Foldable<{BYTES(BITS)}, R> for ReseedableRng<C, R, L> {
+        #[inline(always)]
         fn buf_mut(&mut self) -> &mut [u8; BYTES(BITS)] { self.ctx.ctx.buf_mut() }
     }
 
