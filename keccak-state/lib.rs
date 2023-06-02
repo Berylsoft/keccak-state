@@ -24,6 +24,7 @@ pub const R256: usize = bits_to_rate(256);
 pub const R288: usize = bits_to_rate(288);
 pub const R384: usize = bits_to_rate(384);
 pub const R512: usize = bits_to_rate(512);
+pub const R544: usize = bits_to_rate(544);
 
 pub const DKeccak : u8 = 0x01;
 pub const DSHA3   : u8 = 0x06;
