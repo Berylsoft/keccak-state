@@ -202,14 +202,16 @@ macro_rules! cshake_customs {
 
 #[cfg(feature = "rand")]
 pub mod rand {
+    use foldable::*;
+    use keccak_state::{BITS, BYTES};
     use crate::{CShake, Squeeze, Reset, CShakeCustom};
 
-    pub struct ReseedableRng<C: CShakeCustom, const I: usize, const L: usize> {
+    pub struct ReseedableRng<C: CShakeCustom, const R: usize, const L: usize> {
         ctx: CShake<C>,
         offset: usize,
     }
 
-    impl<C: CShakeCustom, const I: usize, const L: usize> ReseedableRng<C, I, L> {
+    impl<C: CShakeCustom, const R: usize, const L: usize> ReseedableRng<C, R, L> {
         pub fn init(custom: C) -> Self {
             let mut ctx = custom.create();
             ctx.absorb_seed::<L>();
@@ -217,28 +219,26 @@ pub mod rand {
         }
     }
 
-    impl<C: CShakeCustom, const I: usize, const L: usize> Squeeze for ReseedableRng<C, I, L> {
-        // from KeccakState::fold
-        fn squeeze(&mut self, output: &mut [u8]) {
-            let mut iobuf_offset = 0;
-            let mut iobuf_rest = output.len();
-            let mut current_len = I - self.offset;
-            while iobuf_rest >= current_len {
-                self.ctx.squeeze(&mut output[iobuf_offset..][..current_len]);
-                self.reset();
-                iobuf_offset += current_len;
-                iobuf_rest -= current_len;
-                current_len = I;
-            }
-            self.ctx.squeeze(&mut output[iobuf_offset..][..iobuf_rest]);
-            self.offset += iobuf_rest;
+    impl<C: CShakeCustom, const R: usize, const L: usize> Permute for ReseedableRng<C, R, L> {
+        fn permute(&mut self) {
+            self.ctx.reset();
+            self.ctx.absorb_seed::<L>();
         }
     }
 
-    impl<C: CShakeCustom, const I: usize, const L: usize> Reset for ReseedableRng<C, I, L> {
+    impl<C: CShakeCustom, const R: usize, const L: usize> Foldable<{BYTES(BITS)}, R> for ReseedableRng<C, R, L> {
+        fn buf_mut(&mut self) -> &mut [u8; BYTES(BITS)] { self.ctx.ctx.buf_mut() }
+    }
+
+    impl<C: CShakeCustom, const R: usize, const L: usize> Squeeze for ReseedableRng<C, R, L> {
+        fn squeeze(&mut self, output: &mut [u8]) {
+            self.offset = self.fold(self.offset, IOBuf::Out(output, copy));
+        }
+    }
+
+    impl<C: CShakeCustom, const R: usize, const L: usize> Reset for ReseedableRng<C, R, L> {
         fn reset(&mut self) {
-            self.ctx.reset();
-            self.ctx.absorb_seed::<L>();
+            self.permute();
             self.offset = 0;
         }
     }

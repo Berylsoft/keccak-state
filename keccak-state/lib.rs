@@ -35,6 +35,8 @@ use zeroize::Zeroize;
 pub const Absorbing: bool = true;
 pub const Squeezing: bool = false;
 
+use foldable::*;
+
 #[derive(Clone)]
 pub struct KeccakState<const P: bool, const R: usize> {
     buf: [u8; BYTES(BITS)],
@@ -49,6 +51,33 @@ impl<const P: bool, const R: usize> Drop for KeccakState<P, R> {
         self.buf.zeroize();
         self.offset = 0;
     }
+}
+
+impl<const P: bool, const R: usize> Permute for KeccakState<P, R> {
+    fn permute(&mut self) {
+        let words: &mut [u64; WORDS(BITS)] = unsafe { core::mem::transmute(&mut self.buf) };
+        #[cfg(target_endian = "big")]
+        #[inline]
+        fn swap_endianess(words: &mut [u64; WORDS(BITS)]) {
+            for item in words {
+                *item = item.swap_bytes();
+            }
+        }
+        #[cfg(target_endian = "big")]
+        swap_endianess(words);
+        if P == KeccakF {
+            keccak::f1600(words);
+        } else {
+            keccak::p1600(words, 12);
+        }
+        #[cfg(target_endian = "big")]
+        swap_endianess(words);
+    }
+}
+
+impl<const P: bool, const R: usize> Foldable<{BYTES(BITS)}, R> for KeccakState<P, R> {
+    #[inline(always)]
+    fn buf_mut(&mut self) -> &mut [u8; BYTES(BITS)] { &mut self.buf }
 }
 
 impl<const P: bool, const R: usize> KeccakState<P, R> {
@@ -75,49 +104,14 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         }
     }
 
-    fn fold<F: FnMut(&mut [u8], usize, usize, usize)>(&mut self, iobuf_len: usize, mut f: F) {
-        let mut iobuf_offset = 0;
-        let mut iobuf_rest = iobuf_len;
-        let mut current_len = R - self.offset;
-        while iobuf_rest >= current_len {
-            f(&mut self.buf, self.offset, iobuf_offset, current_len);
-            self.permute();
-            iobuf_offset += current_len;
-            iobuf_rest -= current_len;
-            current_len = R;
-        }
-        f(&mut self.buf, self.offset, iobuf_offset, iobuf_rest);
-        self.offset += iobuf_rest;
+    pub fn fill_block(&mut self) {
+        self.permute();
+        self.offset = 0;
     }
 
     fn pad(&mut self) {
         self.buf[self.offset] ^= self.delim;
         self.buf[R - 1] ^= 0x80;
-    }
-
-    fn permute(&mut self) {
-        let words: &mut [u64; WORDS(BITS)] = unsafe { core::mem::transmute(&mut self.buf) };
-        #[cfg(target_endian = "big")]
-        #[inline]
-        fn swap_endianess(words: &mut [u64; WORDS(BITS)]) {
-            for item in words {
-                *item = item.swap_bytes();
-            }
-        }
-        #[cfg(target_endian = "big")]
-        swap_endianess(words);
-        if P == KeccakF {
-            keccak::f1600(words);
-        } else {
-            keccak::p1600(words, 12);
-        }
-        #[cfg(target_endian = "big")]
-        swap_endianess(words);
-        self.offset = 0;
-    }
-
-    pub fn fill_block(&mut self) {
-        self.permute();
     }
 
     fn switch<const M: bool>(&mut self) {
@@ -136,40 +130,22 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
 
     pub fn absorb(&mut self, input: &[u8]) {
         self.switch::<Absorbing>();
-        self.fold(input.len(), |buf, buf_offset, iobuf_offset, len| {
-            let dst = &mut buf[buf_offset..][..len];
-            let src = &input[iobuf_offset..][..len];
-            for i in 0..len {
-                dst[i] ^= src[i];
-            }
-        });
+        self.offset = self.fold(self.offset, IOBuf::In(input, xor));
     }
 
     pub fn squeeze(&mut self, output: &mut [u8]) {
         self.switch::<Squeezing>();
-        self.fold(output.len(), |buf, buf_offset, iobuf_offset, len| {
-            let dst = &mut output[iobuf_offset..][..len];
-            let src = &buf[buf_offset..][..len];
-            dst.copy_from_slice(src)
-        });
+        self.offset = self.fold(self.offset, IOBuf::Out(output, copy));
     }
 
     pub fn squeeze_xor(&mut self, output: &mut [u8]) {
         self.switch::<Squeezing>();
-        self.fold(output.len(), |buf, buf_offset, iobuf_offset, len| {
-            let dst = &mut output[iobuf_offset..][..len];
-            let src = &buf[buf_offset..][..len];
-            for i in 0..len {
-                dst[i] ^= src[i];
-            }
-        });
+        self.offset = self.fold(self.offset, IOBuf::Out(output, xor));
     }
 
     pub fn squeeze_skip(&mut self, len: usize) {
         self.switch::<Squeezing>();
-        self.fold(len, |_buf, _buf_offset, _iobuf_offset, _len| {
-            // do nothing
-        });
+        self.offset = self.fold(self.offset, IOBuf::Skip(len));
     }
 
     pub fn reset(&mut self) {
