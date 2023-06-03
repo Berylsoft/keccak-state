@@ -222,13 +222,13 @@ pub mod rand {
         fn squeeze(&mut self, output: &mut [u8]) {
             let mut iobuf_offset = 0;
             let mut iobuf_rest = output.len();
-            let mut current_len = I - self.offset;
-            while iobuf_rest >= current_len {
-                self.ctx.squeeze(&mut output[iobuf_offset..][..current_len]);
+            let mut len = I - self.offset;
+            while iobuf_rest >= len {
+                self.ctx.squeeze(&mut output[iobuf_offset..][..len]);
                 self.reset();
-                iobuf_offset += current_len;
-                iobuf_rest -= current_len;
-                current_len = I;
+                iobuf_offset += len;
+                iobuf_rest -= len;
+                len = I;
             }
             self.ctx.squeeze(&mut output[iobuf_offset..][..iobuf_rest]);
             self.offset += iobuf_rest;
