@@ -37,8 +37,10 @@ use zeroize::Zeroize;
 pub const Absorbing: bool = true;
 pub const Squeezing: bool = false;
 
+type Operator = fn(&mut [u8], &[u8], usize);
+
 #[inline(always)]
-pub fn xor(dst: &mut [u8], src: &[u8], len: usize) {
+fn xor(dst: &mut [u8], src: &[u8], len: usize) {
     let (dst, src) = (&mut dst[..len], &src[..len]);
     for i in 0..len {
         dst[i] ^= src[i];
@@ -46,19 +48,35 @@ pub fn xor(dst: &mut [u8], src: &[u8], len: usize) {
 }
 
 #[inline(always)]
-pub fn copy(dst: &mut [u8], src: &[u8], len: usize) {
+fn copy(dst: &mut [u8], src: &[u8], len: usize) {
     let (dst, src) = (&mut dst[..len], &src[..len]);
     dst.copy_from_slice(src)
 }
 
-#[inline(always)]
-pub fn in_conbine(input: &[u8], f: fn(&mut [u8], &[u8], usize)) -> impl FnMut(&mut [u8], usize, usize) + '_ {
-    move |buf_part, iobuf_offset, len| f(buf_part, &input[iobuf_offset..], len)
+enum IOBuf<'b> {
+    In(&'b [u8], Operator),
+    Out(&'b mut [u8], Operator),
+    Skip(usize),
 }
 
-#[inline(always)]
-pub fn out_conbine(output: &mut [u8], f: fn(&mut [u8], &[u8], usize)) -> impl FnMut(&mut [u8], usize, usize) + '_ {
-    move |buf_part, iobuf_offset, len| f(&mut output[iobuf_offset..], buf_part, len)
+impl<'b> IOBuf<'b> {
+    #[inline]
+    fn len(&self) -> usize {
+        match self {
+            IOBuf::In(iobuf, _) => iobuf.len(),
+            IOBuf::Out(iobuf, _) => iobuf.len(),
+            IOBuf::Skip(len) => *len,
+        }
+    }
+
+    #[inline]
+    fn exec(&mut self, buf_part: &mut [u8], iobuf_offset: usize, len: usize) {
+        match self {
+            IOBuf::In(iobuf, f) => f(buf_part, &iobuf[iobuf_offset..], len),
+            IOBuf::Out(iobuf, f) => f(&mut iobuf[iobuf_offset..], buf_part, len),
+            IOBuf::Skip(_) => {},
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -101,18 +119,18 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         }
     }
 
-    fn fold<F: FnMut(&mut [u8], usize, usize)>(&mut self, iobuf_len: usize, mut f: F) {
+    fn fold(&mut self, mut iobuf: IOBuf) {
         let mut iobuf_offset = 0;
-        let mut iobuf_rest = iobuf_len;
+        let mut iobuf_rest = iobuf.len();
         let mut len = R - self.offset;
         while iobuf_rest >= len {
-            f(&mut self.buf[self.offset..], iobuf_offset, len);
+            iobuf.exec(&mut self.buf[self.offset..], iobuf_offset, len);
             self.permute();
             iobuf_offset += len;
             iobuf_rest -= len;
             len = R;
         }
-        f(&mut self.buf[self.offset..], iobuf_offset, iobuf_rest);
+        iobuf.exec(&mut self.buf[self.offset..], iobuf_offset, iobuf_rest);
         self.offset += iobuf_rest;
     }
 
@@ -162,22 +180,22 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
 
     pub fn absorb(&mut self, input: &[u8]) {
         self.switch::<Absorbing>();
-        self.fold(input.len(), in_conbine(input, xor));
+        self.fold(IOBuf::In(input, xor));
     }
 
     pub fn squeeze(&mut self, output: &mut [u8]) {
         self.switch::<Squeezing>();
-        self.fold(output.len(), out_conbine(output, copy));
+        self.fold(IOBuf::Out(output, copy));
     }
 
     pub fn squeeze_xor(&mut self, output: &mut [u8]) {
         self.switch::<Squeezing>();
-        self.fold(output.len(), out_conbine(output, xor));
+        self.fold(IOBuf::Out(output, xor));
     }
 
     pub fn squeeze_skip(&mut self, len: usize) {
         self.switch::<Squeezing>();
-        self.fold(len, |_, _, _| {});
+        self.fold(IOBuf::Skip(len));
     }
 
     pub fn reset(&mut self) {
