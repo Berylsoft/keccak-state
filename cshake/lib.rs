@@ -180,6 +180,16 @@ pub trait CShakeCustom: Sized {
             CShake::create(self)
         }
     }
+
+    #[inline]
+    fn once(self, input: &[u8], output: &mut [u8]) {
+        self.create().once(input, output)
+    }
+
+    #[inline]
+    fn once_to_array<const N: usize>(self, input: &[u8]) -> [u8; N] {
+        self.create().once_to_array(input)
+    }
 }
 
 pub struct NoCustom;
