@@ -1,77 +1,54 @@
 #![cfg_attr(not(feature = "alloc"), no_std)]
 
-pub use keccak_state;
+pub use keccak_state::{self, Absorb, FillBlock, Squeeze, SqueezeXor, SqueezeSkip, Reset};
+#[cfg(feature = "seed")]
+pub use keccak_state::AbsorbSeed;
 use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE, BYTES, BITS};
 #[cfg(feature = "zeroize-on-drop")]
 use zeroize::Zeroize;
 
-const P: bool = KeccakF;
+// region: encode len
+
+pub trait AbsorbLenLeft: Absorb {
+    fn absorb_len_left(&mut self, len: usize) {
+        if len == 0 {
+            self.absorb(&[1, 0]);
+        } else {
+            let lz = len.leading_zeros() / 8;
+            let len = len.to_be_bytes();
+            self.absorb(&[(core::mem::size_of::<usize>() as u8) - (lz as u8)]);
+            self.absorb(&len[lz as usize..]);
+        }
+    }
+}
+
+impl<T: Absorb> AbsorbLenLeft for T {}
+
+#[cfg(feature = "right-encode")]
+pub trait AbsorbLenRight: Absorb {
+    fn absorb_len_right(&mut self, len: usize) {
+        if len == 0 {
+            self.absorb(&[0, 1]);
+        } else {
+            let lz = len.leading_zeros() / 8;
+            let len = len.to_be_bytes();
+            self.absorb(&len[lz as usize..]);
+            self.absorb(&[(core::mem::size_of::<usize>() as u8) - (lz as u8)]);
+        }
+    }
+}
+
+#[cfg(feature = "right-encode")]
+impl<T: Absorb> AbsorbLenRight for T {}
+
+// endregion
+
+// region: state
+
 const R: usize = R256;
 
-pub trait Absorb: Sized {
-    fn absorb(&mut self, input: &[u8]);
-    
-    #[inline(always)]
-    fn chain_absorb(mut self, input: &[u8]) -> Self {
-        self.absorb(input);
-        self
-    }
-}
-
-pub trait Squeeze {
-    fn squeeze(&mut self, output: &mut [u8]);
-
-    #[inline]
-    fn squeeze_to_array<const N: usize>(&mut self) -> [u8; N] {
-        let mut buf = [0; N];
-        self.squeeze(&mut buf);
-        buf
-    }
-
-    #[cfg(feature = "alloc")]
-    #[inline]
-    fn squeeze_to_vec(&mut self, len: usize) -> Vec<u8> {
-        let mut buf = vec![0; len];
-        self.squeeze(&mut buf);
-        buf
-    }
-}
-
-pub trait SqueezeXor {
-    fn squeeze_xor(&mut self, output: &mut [u8]);
-}
-
-pub trait SqueezeSkip {
-    fn skip(&mut self, len: usize);
-
-    #[inline(always)]
-    fn skip_const<const N: usize>(&mut self) {
-        self.skip(N)
-    }
-}
-
-pub trait Once: Absorb + Squeeze {
-    #[inline]
-    fn once(mut self, input: &[u8], output: &mut [u8]) {
-        self.absorb(input);
-        self.squeeze(output);
-    }
-
-    #[inline]
-    fn once_to_array<const N: usize>(mut self, input: &[u8]) -> [u8; N] {
-        self.absorb(input);
-        self.squeeze_to_array()
-    }
-}
-
-impl<T: Absorb + Squeeze> Once for T {}
-
-pub trait Reset {
-    fn reset(&mut self);
-}
-
 pub struct CShake<C: CShakeCustom> {
-    ctx: KeccakState<P, R>,
+    ctx: KeccakState<KeccakF, R>,
     custom: C,
 }
 
@@ -101,12 +78,32 @@ impl<C: CShakeCustom> CShake<C> {
         _self.init();
         _self
     }
+
+    pub fn squeeze_to_ctx<const N: usize, C2: CShakeCustom>(&mut self, custom: C2) -> CShake<C2> {
+        #[allow(unused_mut)]
+        let mut buf = self.squeeze_to_array::<N>();
+        let ctx = custom.create().chain_absorb(&buf);
+        #[cfg(feature = "zeroize-on-drop")]
+        buf.zeroize();
+        ctx
+    }
 }
+
+// endregion
+
+// region: trait impls
 
 impl<C: CShakeCustom> Absorb for CShake<C> {
     #[inline(always)]
     fn absorb(&mut self, input: &[u8]) {
         self.ctx.absorb(input);
+    }
+}
+
+impl<C: CShakeCustom> FillBlock for CShake<C> {
+    #[inline(always)]
+    fn fill_block(&mut self) {
+        self.ctx.fill_block();
     }
 }
 
@@ -126,7 +123,7 @@ impl<C: CShakeCustom> SqueezeXor for CShake<C> {
 
 impl<C: CShakeCustom> SqueezeSkip for CShake<C> {
     #[inline(always)]
-    fn skip(&mut self, len: usize) {
+    fn squeeze_skip(&mut self, len: usize) {
         self.ctx.squeeze_skip(len)
     }
 }
@@ -138,24 +135,9 @@ impl<C: CShakeCustom> Reset for CShake<C> {
     }
 }
 
-impl<C: CShakeCustom> CShake<C> {
-    pub fn squeeze_to_ctx<const N: usize, C2: CShakeCustom>(&mut self, custom: C2) -> CShake<C2> {
-        #[allow(unused_mut)]
-        let mut buf = self.squeeze_to_array::<N>();
-        let ctx = custom.create().chain_absorb(&buf);
-        #[cfg(feature = "zeroize-on-drop")]
-        buf.zeroize();
-        ctx
-    }
+// endregion
 
-    #[cfg(feature = "seed")]
-    pub fn absorb_seed<const N: usize>(&mut self) {
-        use core::mem::MaybeUninit;
-        let mut buf: [MaybeUninit<u8>; N] = unsafe { MaybeUninit::uninit().assume_init() };
-        let ready_buf = getrandom::getrandom_uninit(&mut buf).unwrap();
-        self.absorb(ready_buf);
-    }
-}
+// region: custom
 
 pub trait CShakeCustom: Sized {
     const NAME: &'static str = "";
@@ -183,12 +165,12 @@ pub trait CShakeCustom: Sized {
 
     #[inline]
     fn once(self, input: &[u8], output: &mut [u8]) {
-        self.create().once(input, output)
+        self.create().chain_absorb(input).squeeze(output)
     }
 
     #[inline]
     fn once_to_array<const N: usize>(self, input: &[u8]) -> [u8; N] {
-        self.create().once_to_array(input)
+        self.create().chain_absorb(input).squeeze_to_array()
     }
 }
 
@@ -210,9 +192,11 @@ macro_rules! cshake_customs {
     )*};
 }
 
+// endregion
+
 #[cfg(feature = "rand")]
 pub mod rand {
-    use crate::{CShake, Squeeze, Reset, CShakeCustom};
+    use crate::{CShake, Squeeze, Reset, AbsorbSeed, CShakeCustom};
 
     pub struct ReseedableRng<C: CShakeCustom, const I: usize, const L: usize> {
         ctx: CShake<C>,

@@ -12,8 +12,9 @@ path = "lib.rs"
 [dependencies]
 keccak = { version = "0.1.4", features = ["asm"] } # "simd" when portable_simd stable
 zeroize = { version = "1.6.0", optional = true }
+getrandom = { version = "0.2.9", optional = true }
 
 [features]
-left-encode = []
-right-encode = []
+alloc = []
 zeroize-on-drop = ["zeroize"]
+seed = ["getrandom"]

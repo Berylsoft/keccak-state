@@ -1,5 +1,10 @@
-#![no_std]
+#![cfg_attr(not(feature = "alloc"), no_std)]
 #![allow(non_upper_case_globals, non_snake_case)]
+
+#[cfg(feature = "zeroize-on-drop")]
+use zeroize::Zeroize;
+
+// region: consts
 
 pub const BITS: usize = 1600;
 
@@ -31,11 +36,12 @@ pub const DSHA3   : u8 = 0x06;
 pub const DSHAKE  : u8 = 0x1f;
 pub const DCSHAKE : u8 = 0x04;
 
-#[cfg(feature = "zeroize-on-drop")]
-use zeroize::Zeroize;
-
 pub const Absorbing: bool = true;
 pub const Squeezing: bool = false;
+
+// endregion
+
+// region: iobuf
 
 type Operator = fn(&mut [u8], &[u8], usize);
 
@@ -78,6 +84,10 @@ impl<'b> IOBuf<'b> {
         }
     }
 }
+
+// endregion
+
+// region: state
 
 #[derive(Clone)]
 pub struct KeccakState<const P: bool, const R: usize> {
@@ -160,74 +170,14 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         self.offset = 0;
     }
 
-    pub fn fill_block(&mut self) {
-        self.permute();
-    }
-
+    #[inline]
     fn switch<const M: bool>(&mut self) {
-        match (self.mode, M) {
-            (Absorbing, Squeezing) => {
+        if self.mode != M {
+            if M == Squeezing {
                 self.pad();
-                self.fill_block();
-            },
-            (Squeezing, Absorbing) => {
-                self.fill_block();
-            },
-            _ => {},
-        }
-        self.mode = M;
-    }
-
-    pub fn absorb(&mut self, input: &[u8]) {
-        self.switch::<Absorbing>();
-        self.fold(IOBuf::In(input, xor));
-    }
-
-    pub fn squeeze(&mut self, output: &mut [u8]) {
-        self.switch::<Squeezing>();
-        self.fold(IOBuf::Out(output, copy));
-    }
-
-    pub fn squeeze_xor(&mut self, output: &mut [u8]) {
-        self.switch::<Squeezing>();
-        self.fold(IOBuf::Out(output, xor));
-    }
-
-    pub fn squeeze_skip(&mut self, len: usize) {
-        self.switch::<Squeezing>();
-        self.fold(IOBuf::Skip(len));
-    }
-
-    pub fn reset(&mut self) {
-        #[cfg(feature = "zeroize-on-drop")]
-        self.buf.zeroize();
-        #[cfg(not(feature = "zeroize-on-drop"))]
-        let _ = core::mem::replace(&mut self.buf, [0; BYTES(BITS)]);
-        self.offset = 0;
-        self.mode = Absorbing;
-    }
-
-    #[cfg(feature = "left-encode")]
-    pub fn absorb_len_left(&mut self, len: usize) {
-        if len == 0 {
-            self.absorb(&[1, 0]);
-        } else {
-            let lz = len.leading_zeros() / 8;
-            let len = len.to_be_bytes();
-            self.absorb(&[(core::mem::size_of::<usize>() as u8) - (lz as u8)]);
-            self.absorb(&len[lz as usize..]);
-        }
-    }
-
-    #[cfg(feature = "right-encode")]
-    pub fn absorb_len_right(&mut self, len: usize) {
-        if len == 0 {
-            self.absorb(&[0, 1]);
-        } else {
-            let lz = len.leading_zeros() / 8;
-            let len = len.to_be_bytes();
-            self.absorb(&len[lz as usize..]);
-            self.absorb(&[(core::mem::size_of::<usize>() as u8) - (lz as u8)]);
+            }
+            self.fill_block();
+            self.mode = M;
         }
     }
 
@@ -236,3 +186,121 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         KeccakState { buf, offset, mode, delim }
     }
 }
+
+// endregion
+
+// region: traits
+
+pub trait Absorb: Sized {
+    fn absorb(&mut self, input: &[u8]);
+    
+    #[inline(always)]
+    fn chain_absorb(mut self, input: &[u8]) -> Self {
+        self.absorb(input);
+        self
+    }
+}
+
+pub trait FillBlock {
+    fn fill_block(&mut self);
+}
+
+pub trait Squeeze {
+    fn squeeze(&mut self, output: &mut [u8]);
+
+    #[inline]
+    fn squeeze_to_array<const N: usize>(&mut self) -> [u8; N] {
+        let mut buf = [0; N];
+        self.squeeze(&mut buf);
+        buf
+    }
+
+    #[cfg(feature = "alloc")]
+    #[inline]
+    fn squeeze_to_vec(&mut self, len: usize) -> Vec<u8> {
+        let mut buf = vec![0; len];
+        self.squeeze(&mut buf);
+        buf
+    }
+}
+
+pub trait SqueezeXor {
+    fn squeeze_xor(&mut self, output: &mut [u8]);
+}
+
+pub trait SqueezeSkip {
+    fn squeeze_skip(&mut self, len: usize);
+
+    #[inline(always)]
+    fn squeeze_skip_const<const N: usize>(&mut self) {
+        self.squeeze_skip(N)
+    }
+}
+
+pub trait Reset {
+    fn reset(&mut self);
+}
+
+#[cfg(feature = "seed")]
+pub trait AbsorbSeed: Absorb {
+    fn absorb_seed<const N: usize>(&mut self) {
+        use core::mem::MaybeUninit;
+        let mut buf: [MaybeUninit<u8>; N] = unsafe { MaybeUninit::uninit().assume_init() };
+        let ready_buf = getrandom::getrandom_uninit(&mut buf).unwrap();
+        self.absorb(ready_buf);
+    }
+}
+
+#[cfg(feature = "seed")]
+impl<T: Absorb> AbsorbSeed for T {}
+
+// endregion
+
+// region: trait impls
+
+impl<const P: bool, const R: usize> Absorb for KeccakState<P, R> {
+    fn absorb(&mut self, input: &[u8]) {
+        self.switch::<Absorbing>();
+        self.fold(IOBuf::In(input, xor));
+    }
+}
+
+impl<const P: bool, const R: usize> FillBlock for KeccakState<P, R> {
+    fn fill_block(&mut self) {
+        self.permute();
+    }
+}
+
+impl<const P: bool, const R: usize> Squeeze for KeccakState<P, R> {
+    fn squeeze(&mut self, output: &mut [u8]) {
+        self.switch::<Squeezing>();
+        self.fold(IOBuf::Out(output, copy));
+    }
+}
+
+impl<const P: bool, const R: usize> SqueezeXor for KeccakState<P, R> {
+    fn squeeze_xor(&mut self, output: &mut [u8]) {
+        self.switch::<Squeezing>();
+        self.fold(IOBuf::Out(output, xor));
+    }
+}
+
+impl<const P: bool, const R: usize> SqueezeSkip for KeccakState<P, R> {
+    fn squeeze_skip(&mut self, len: usize) {
+        self.switch::<Squeezing>();
+        self.fold(IOBuf::Skip(len));
+    }
+}
+
+impl<const P: bool, const R: usize> Reset for KeccakState<P, R> {
+    fn reset(&mut self) {
+        #[cfg(feature = "zeroize-on-drop")]
+        self.buf.zeroize();
+        #[cfg(not(feature = "zeroize-on-drop"))]
+        let _ = core::mem::replace(&mut self.buf, [0; BYTES(BITS)]);
+        self.offset = 0;
+        self.mode = Absorbing;
+    }
+}
+
+// endregion
