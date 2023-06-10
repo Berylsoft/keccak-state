@@ -19,17 +19,17 @@ pub const fn BYTES(bits: usize) -> usize {
 pub const KeccakF: bool = true;
 pub const KeccakP: bool = false;
 
-pub const fn bits_to_rate(bits: usize) -> usize {
+pub const fn R(bits: usize) -> usize {
     200 - bits / 4
 }
 
-pub const R128: usize = bits_to_rate(128);
-pub const R224: usize = bits_to_rate(224);
-pub const R256: usize = bits_to_rate(256);
-pub const R288: usize = bits_to_rate(288);
-pub const R384: usize = bits_to_rate(384);
-pub const R512: usize = bits_to_rate(512);
-pub const R544: usize = bits_to_rate(544);
+pub const R128: usize = R(128);
+pub const R224: usize = R(224);
+pub const R256: usize = R(256);
+pub const R288: usize = R(288);
+pub const R384: usize = R(384);
+pub const R512: usize = R(512);
+pub const R544: usize = R(544);
 
 pub const DKeccak : u8 = 0x01;
 pub const DSHA3   : u8 = 0x06;
