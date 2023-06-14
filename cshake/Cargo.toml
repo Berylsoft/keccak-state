@@ -16,6 +16,7 @@ keccak-state = { path = "../keccak-state" }
 [features]
 right-encode = []
 alloc = ["keccak-state/alloc"]
+std = ["alloc"]
 zeroize-on-drop = ["zeroize", "keccak-state/zeroize-on-drop"]
 seed = ["keccak-state/seed"]
 rand = ["seed"]

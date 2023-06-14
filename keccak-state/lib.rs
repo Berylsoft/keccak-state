@@ -1,8 +1,8 @@
-#![cfg_attr(not(feature = "alloc"), no_std)]
+#![no_std]
 #![allow(non_upper_case_globals, non_snake_case)]
 
-#[cfg(feature = "zeroize-on-drop")]
-use zeroize::Zeroize;
+#[cfg(feature = "alloc")] extern crate alloc;
+#[cfg(feature = "zeroize-on-drop")] use zeroize::Zeroize;
 
 // region: consts
 
@@ -217,8 +217,8 @@ pub trait Squeeze {
 
     #[cfg(feature = "alloc")]
     #[inline]
-    fn squeeze_to_vec(&mut self, len: usize) -> Vec<u8> {
-        let mut buf = vec![0; len];
+    fn squeeze_to_vec(&mut self, len: usize) -> alloc::vec::Vec<u8> {
+        let mut buf = alloc::vec::from_elem(0, len);
         self.squeeze(&mut buf);
         buf
     }

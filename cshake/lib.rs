@@ -1,11 +1,11 @@
-#![cfg_attr(not(feature = "alloc"), no_std)]
+#![no_std]
 
+#[cfg(feature = "alloc")] extern crate alloc;
+#[cfg(feature = "std")] extern crate std;
+#[cfg(feature = "zeroize-on-drop")] use zeroize::Zeroize;
 pub use keccak_state::{self, Absorb, FillBlock, Squeeze, SqueezeXor, SqueezeSkip, Reset};
-#[cfg(feature = "seed")]
-pub use keccak_state::AbsorbSeed;
+#[cfg(feature = "seed")] pub use keccak_state::AbsorbSeed;
 use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE, BYTES, BITS};
-#[cfg(feature = "zeroize-on-drop")]
-use zeroize::Zeroize;
 
 // region: encode len
 
@@ -240,7 +240,7 @@ pub mod rand {
     pub const DEFAULT_RESEED_INTERVAL: usize = 1024 * 64;
     pub const DEFAULT_SEED_LEN: usize = 32;
 
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     mod thread {
         use std::{thread_local, rc::Rc, cell::UnsafeCell};
         use crate::{Squeeze, Reset, NoCustom};
@@ -285,6 +285,6 @@ pub mod rand {
         }
     }
 
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     pub use thread::*;
 }
