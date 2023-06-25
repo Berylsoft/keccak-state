@@ -39,11 +39,13 @@ pub const DCSHAKE : u8 = 0x04;
 pub const Absorbing: bool = true;
 pub const Squeezing: bool = false;
 
+pub const NOP: bool = false;
+pub const COPY: bool = false;
+pub const XOR: bool = true;
+
 // endregion
 
 // region: iobuf
-
-type Operator = fn(&mut [u8], &[u8], usize);
 
 #[inline(always)]
 fn xor(dst: &mut [u8], src: &[u8], len: usize) {
@@ -59,27 +61,31 @@ fn copy(dst: &mut [u8], src: &[u8], len: usize) {
     dst.copy_from_slice(src)
 }
 
-enum IOBuf<'b> {
-    In(&'b [u8], Operator),
-    Out(&'b mut [u8], Operator),
+enum IOBuf<'b, const F: bool> {
+    In(&'b [u8]),
+    Out(&'b mut [u8]),
     Skip(usize),
 }
 
-impl<'b> IOBuf<'b> {
+impl<'b, const F: bool> IOBuf<'b, F> {
     #[inline]
     fn len(&self) -> usize {
         match self {
-            IOBuf::In(iobuf, _) => iobuf.len(),
-            IOBuf::Out(iobuf, _) => iobuf.len(),
+            IOBuf::In(iobuf) => iobuf.len(),
+            IOBuf::Out(iobuf) => iobuf.len(),
             IOBuf::Skip(len) => *len,
         }
     }
 
     #[inline]
     fn exec(&mut self, buf_part: &mut [u8], iobuf_offset: usize, len: usize) {
+        let f = match F {
+            COPY => copy,
+            XOR => xor,
+        };
         match self {
-            IOBuf::In(iobuf, f) => f(buf_part, &iobuf[iobuf_offset..], len),
-            IOBuf::Out(iobuf, f) => f(&mut iobuf[iobuf_offset..], buf_part, len),
+            IOBuf::In(iobuf) => f(buf_part, &iobuf[iobuf_offset..], len),
+            IOBuf::Out(iobuf) => f(&mut iobuf[iobuf_offset..], buf_part, len),
             IOBuf::Skip(_) => {},
         }
     }
@@ -129,7 +135,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         }
     }
 
-    fn fold(&mut self, mut iobuf: IOBuf) {
+    fn fold<const F: bool>(&mut self, mut iobuf: IOBuf<F>) {
         let mut iobuf_offset = 0;
         let mut iobuf_rest = iobuf.len();
         let mut len = R - self.offset;
@@ -231,6 +237,7 @@ pub trait SqueezeXor {
 pub trait SqueezeSkip {
     fn squeeze_skip(&mut self, len: usize);
 
+    // todo really need?
     #[inline(always)]
     fn squeeze_skip_const<const N: usize>(&mut self) {
         self.squeeze_skip(N)
@@ -248,6 +255,8 @@ pub trait AbsorbSeed: Absorb {
         let mut buf: [MaybeUninit<u8>; N] = unsafe { MaybeUninit::uninit().assume_init() };
         let ready_buf = getrandom::getrandom_uninit(&mut buf).unwrap();
         self.absorb(ready_buf);
+        #[cfg(feature = "zeroize-on-drop")]
+        buf.zeroize();
     }
 }
 
@@ -261,7 +270,7 @@ impl<T: Absorb> AbsorbSeed for T {}
 impl<const P: bool, const R: usize> Absorb for KeccakState<P, R> {
     fn absorb(&mut self, input: &[u8]) {
         self.switch::<Absorbing>();
-        self.fold(IOBuf::In(input, xor));
+        self.fold::<XOR>(IOBuf::In(input));
     }
 }
 
@@ -274,21 +283,21 @@ impl<const P: bool, const R: usize> FillBlock for KeccakState<P, R> {
 impl<const P: bool, const R: usize> Squeeze for KeccakState<P, R> {
     fn squeeze(&mut self, output: &mut [u8]) {
         self.switch::<Squeezing>();
-        self.fold(IOBuf::Out(output, copy));
+        self.fold::<COPY>(IOBuf::Out(output));
     }
 }
 
 impl<const P: bool, const R: usize> SqueezeXor for KeccakState<P, R> {
     fn squeeze_xor(&mut self, output: &mut [u8]) {
         self.switch::<Squeezing>();
-        self.fold(IOBuf::Out(output, xor));
+        self.fold::<XOR>(IOBuf::Out(output));
     }
 }
 
 impl<const P: bool, const R: usize> SqueezeSkip for KeccakState<P, R> {
     fn squeeze_skip(&mut self, len: usize) {
         self.switch::<Squeezing>();
-        self.fold(IOBuf::Skip(len));
+        self.fold::<NOP>(IOBuf::Skip(len));
     }
 }
 
