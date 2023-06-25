@@ -221,6 +221,10 @@ pub trait Absorb: Sized {
     }
 }
 
+pub trait AbsorbZero {
+    fn absorb_zero(&mut self, len: usize);
+}
+
 pub trait FillBlock {
     fn fill_block(&mut self);
 }
@@ -250,12 +254,6 @@ pub trait SqueezeXor {
 
 pub trait SqueezeSkip {
     fn squeeze_skip(&mut self, len: usize);
-
-    // todo really need?
-    #[inline(always)]
-    fn squeeze_skip_const<const N: usize>(&mut self) {
-        self.squeeze_skip(N)
-    }
 }
 
 pub trait Reset {
@@ -285,6 +283,13 @@ impl<const P: bool, const R: usize> Absorb for KeccakState<P, R> {
     fn absorb(&mut self, input: &[u8]) {
         self.switch::<Absorbing>();
         self.fold(In::<XOR>(input));
+    }
+}
+
+impl<const P: bool, const R: usize> AbsorbZero for KeccakState<P, R> {
+    fn absorb_zero(&mut self, len: usize) {
+        self.switch::<Absorbing>();
+        self.fold(Skip(len));
     }
 }
 
