@@ -39,8 +39,8 @@ pub const DCSHAKE : u8 = 0x04;
 pub const Absorbing: bool = true;
 pub const Squeezing: bool = false;
 
-pub const COPY: bool = false;
 pub const XOR: bool = true;
+pub const COPY: bool = false;
 
 // endregion
 
@@ -68,12 +68,12 @@ trait IOBuf {
 struct In<'b, const F: bool>(&'b [u8]);
 
 impl<'b, const F: bool> IOBuf for In<'b, F> {
-    #[inline]
+    #[inline(always)]
     fn len(&self) -> usize {
         self.0.len()
     }
 
-    #[inline]
+    #[inline(always)]
     fn exec(&mut self, buf_part: &mut [u8], iobuf_offset: usize, len: usize) {
         (match F { COPY => copy, XOR => xor })(buf_part, &self.0[iobuf_offset..], len)
     }
@@ -82,12 +82,12 @@ impl<'b, const F: bool> IOBuf for In<'b, F> {
 struct Out<'b, const F: bool>(&'b mut [u8]);
 
 impl<'b, const F: bool> IOBuf for Out<'b, F> {
-    #[inline]
+    #[inline(always)]
     fn len(&self) -> usize {
         self.0.len()
     }
 
-    #[inline]
+    #[inline(always)]
     fn exec(&mut self, buf_part: &mut [u8], iobuf_offset: usize, len: usize) {
         (match F { COPY => copy, XOR => xor })(&mut self.0[iobuf_offset..], buf_part, len)
     }
@@ -96,12 +96,12 @@ impl<'b, const F: bool> IOBuf for Out<'b, F> {
 struct Skip(usize);
 
 impl IOBuf for Skip {
-    #[inline]
+    #[inline(always)]
     fn len(&self) -> usize {
         self.0
     }
 
-    #[inline]
+    #[inline(always)]
     fn exec(&mut self, _buf_part: &mut [u8], _iobuf_offset: usize, _len: usize) { }
 }
 
