@@ -39,7 +39,6 @@ pub const DCSHAKE : u8 = 0x04;
 pub const Absorbing: bool = true;
 pub const Squeezing: bool = false;
 
-pub const NOP: bool = false;
 pub const COPY: bool = false;
 pub const XOR: bool = true;
 
@@ -61,34 +60,49 @@ fn copy(dst: &mut [u8], src: &[u8], len: usize) {
     dst.copy_from_slice(src)
 }
 
-enum IOBuf<'b, const F: bool> {
-    In(&'b [u8]),
-    Out(&'b mut [u8]),
-    Skip(usize),
+trait IOBuf {
+    fn len(&self) -> usize;
+    fn exec(&mut self, buf_part: &mut [u8], iobuf_offset: usize, len: usize);
 }
 
-impl<'b, const F: bool> IOBuf<'b, F> {
+struct In<'b, const F: bool>(&'b [u8]);
+
+impl<'b, const F: bool> IOBuf for In<'b, F> {
     #[inline]
     fn len(&self) -> usize {
-        match self {
-            IOBuf::In(iobuf) => iobuf.len(),
-            IOBuf::Out(iobuf) => iobuf.len(),
-            IOBuf::Skip(len) => *len,
-        }
+        self.0.len()
     }
 
     #[inline]
     fn exec(&mut self, buf_part: &mut [u8], iobuf_offset: usize, len: usize) {
-        let f = match F {
-            COPY => copy,
-            XOR => xor,
-        };
-        match self {
-            IOBuf::In(iobuf) => f(buf_part, &iobuf[iobuf_offset..], len),
-            IOBuf::Out(iobuf) => f(&mut iobuf[iobuf_offset..], buf_part, len),
-            IOBuf::Skip(_) => {},
-        }
+        (match F { COPY => copy, XOR => xor })(buf_part, &self.0[iobuf_offset..], len)
     }
+}
+
+struct Out<'b, const F: bool>(&'b mut [u8]);
+
+impl<'b, const F: bool> IOBuf for Out<'b, F> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    #[inline]
+    fn exec(&mut self, buf_part: &mut [u8], iobuf_offset: usize, len: usize) {
+        (match F { COPY => copy, XOR => xor })(&mut self.0[iobuf_offset..], buf_part, len)
+    }
+}
+
+struct Skip(usize);
+
+impl IOBuf for Skip {
+    #[inline]
+    fn len(&self) -> usize {
+        self.0
+    }
+
+    #[inline]
+    fn exec(&mut self, _buf_part: &mut [u8], _iobuf_offset: usize, _len: usize) { }
 }
 
 // endregion
@@ -135,7 +149,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         }
     }
 
-    fn fold<const F: bool>(&mut self, mut iobuf: IOBuf<F>) {
+    fn fold(&mut self, mut iobuf: impl IOBuf) {
         let mut iobuf_offset = 0;
         let mut iobuf_rest = iobuf.len();
         let mut len = R - self.offset;
@@ -270,7 +284,7 @@ impl<T: Absorb> AbsorbSeed for T {}
 impl<const P: bool, const R: usize> Absorb for KeccakState<P, R> {
     fn absorb(&mut self, input: &[u8]) {
         self.switch::<Absorbing>();
-        self.fold::<XOR>(IOBuf::In(input));
+        self.fold(In::<XOR>(input));
     }
 }
 
@@ -283,21 +297,21 @@ impl<const P: bool, const R: usize> FillBlock for KeccakState<P, R> {
 impl<const P: bool, const R: usize> Squeeze for KeccakState<P, R> {
     fn squeeze(&mut self, output: &mut [u8]) {
         self.switch::<Squeezing>();
-        self.fold::<COPY>(IOBuf::Out(output));
+        self.fold(Out::<COPY>(output));
     }
 }
 
 impl<const P: bool, const R: usize> SqueezeXor for KeccakState<P, R> {
     fn squeeze_xor(&mut self, output: &mut [u8]) {
         self.switch::<Squeezing>();
-        self.fold::<XOR>(IOBuf::Out(output));
+        self.fold(Out::<XOR>(output));
     }
 }
 
 impl<const P: bool, const R: usize> SqueezeSkip for KeccakState<P, R> {
     fn squeeze_skip(&mut self, len: usize) {
         self.switch::<Squeezing>();
-        self.fold::<NOP>(IOBuf::Skip(len));
+        self.fold(Skip(len));
     }
 }
 
