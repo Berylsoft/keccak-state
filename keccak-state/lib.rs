@@ -149,7 +149,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         }
     }
 
-    fn fold(&mut self, mut iobuf: impl IOBuf) {
+    fn fold(&mut self, iobuf: &mut impl IOBuf) {
         let mut iobuf_offset = 0;
         let mut iobuf_rest = iobuf.len();
         let mut len = R - self.offset;
@@ -282,14 +282,14 @@ impl<T: Absorb> AbsorbSeed for T {}
 impl<const P: bool, const R: usize> Absorb for KeccakState<P, R> {
     fn absorb(&mut self, input: &[u8]) {
         self.switch::<Absorbing>();
-        self.fold(In::<XOR>(input));
+        self.fold(&mut In::<XOR>(input));
     }
 }
 
 impl<const P: bool, const R: usize> AbsorbZero for KeccakState<P, R> {
     fn absorb_zero(&mut self, len: usize) {
         self.switch::<Absorbing>();
-        self.fold(Skip(len));
+        self.fold(&mut Skip(len));
     }
 }
 
@@ -302,21 +302,21 @@ impl<const P: bool, const R: usize> FillBlock for KeccakState<P, R> {
 impl<const P: bool, const R: usize> Squeeze for KeccakState<P, R> {
     fn squeeze(&mut self, output: &mut [u8]) {
         self.switch::<Squeezing>();
-        self.fold(Out::<COPY>(output));
+        self.fold(&mut Out::<COPY>(output));
     }
 }
 
 impl<const P: bool, const R: usize> SqueezeXor for KeccakState<P, R> {
     fn squeeze_xor(&mut self, output: &mut [u8]) {
         self.switch::<Squeezing>();
-        self.fold(Out::<XOR>(output));
+        self.fold(&mut Out::<XOR>(output));
     }
 }
 
 impl<const P: bool, const R: usize> SqueezeSkip for KeccakState<P, R> {
     fn squeeze_skip(&mut self, len: usize) {
         self.switch::<Squeezing>();
-        self.fold(Skip(len));
+        self.fold(&mut Skip(len));
     }
 }
 
