@@ -63,7 +63,7 @@ fn alloc_bytes(len: usize) -> NonNull<[u8]> {
     // use <alloc::alloc::Global as core::alloc::Allocator>::alloc when stable
     let raw_ptr = unsafe { alloc(layout) };
     let ptr = NonNull::new(raw_ptr).unwrap_or_else(|| handle_alloc_error(layout));
-    NonNull::slice_from_raw_parts(ptr, layout.size())
+    NonNull::slice_from_raw_parts(ptr, len)
 }
 
 #[cfg(feature = "alloc")]
