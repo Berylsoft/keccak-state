@@ -1,6 +1,7 @@
 use crate::{IOBuf, Foldable, Switch, Squeezing};
-use core::{alloc::Layout, mem::{self, MaybeUninit}, ptr};
-#[cfg(feature = "alloc")] use alloc::{alloc::alloc, boxed::Box};
+use core::{mem::{self, MaybeUninit}, ptr::copy_nonoverlapping};
+#[cfg(feature = "alloc")] use core::{alloc::Layout, ptr::NonNull};
+#[cfg(feature = "alloc")] use alloc::{alloc::{alloc, handle_alloc_error}, boxed::Box};
 
 struct OutUninitStack<const N: usize> {
     data: [MaybeUninit<u8>; N],
@@ -8,13 +9,15 @@ struct OutUninitStack<const N: usize> {
 
 impl<const N: usize> OutUninitStack<N> {
     fn new() -> Self {
+        // use MaybeUninit::uninit_array() when stable
         let data: [MaybeUninit<u8>; N] = unsafe { MaybeUninit::uninit().assume_init() };
         Self { data }
     }
 
-    fn finish(self) -> [u8; N] {
+    unsafe fn finish(self) -> [u8; N] {
         let Self { data } = self;
-        let res = unsafe { (data.as_ptr() as *const [u8; N]).read() };
+        // use data.array_assume_init() when stable
+        let res = (data.as_ptr() as *const [u8; N]).read();
         mem::forget(data);
         res
     }
@@ -29,7 +32,7 @@ impl<const N: usize> IOBuf for OutUninitStack<N> {
     #[inline(always)]
     fn exec(&mut self, buf_part: &mut [u8], iobuf_offset: usize, len: usize) {
         unsafe {
-            ptr::copy_nonoverlapping(
+            copy_nonoverlapping(
                 buf_part.as_ptr(),
                 self.data.as_mut_ptr().cast::<u8>().offset(iobuf_offset as isize),
                 len,
@@ -43,28 +46,41 @@ pub trait SqueezeInitStack<const N: usize>: Foldable + Switch {
         self.switch::<Squeezing>();
         let mut out = OutUninitStack::new();
         self.fold(&mut out);
-        out.finish()
+        unsafe { out.finish() }
     }
+}
+
+// alloc::raw_vec::capacity_overflow
+#[cfg(feature = "alloc")]
+#[cfg(not(no_global_oom_handling))]
+fn capacity_overflow() -> ! {
+    panic!("capacity overflow");
+}
+
+#[cfg(feature = "alloc")]
+fn alloc_bytes(len: usize) -> NonNull<[u8]> {
+    let layout = Layout::array::<u8>(len).unwrap_or_else(|_| capacity_overflow());
+    // use <alloc::alloc::Global as core::alloc::Allocator>::alloc when stable
+    let raw_ptr = unsafe { alloc(layout) };
+    let ptr = NonNull::new(raw_ptr).unwrap_or_else(|| handle_alloc_error(layout));
+    NonNull::slice_from_raw_parts(ptr, layout.size())
 }
 
 #[cfg(feature = "alloc")]
 struct OutUninitHeap {
-    ptr: *mut u8,
-    len: usize,
+    ptr: NonNull<[u8]>,
 }
 
 #[cfg(feature = "alloc")]
 impl OutUninitHeap {
     fn new(len: usize) -> Self {
-        let layout = Layout::array::<u8>(len).unwrap();
-        let ptr = unsafe { alloc(layout) };
-        Self { ptr, len }
+        let ptr = alloc_bytes(len);
+        Self { ptr }
     }
 
-    fn finish(self) -> Box<[u8]> {
-        let Self { ptr, len } = self;
-        let slice_ptr = ptr::slice_from_raw_parts_mut(ptr, len);
-        unsafe { Box::from_raw(slice_ptr) }
+    unsafe fn finish(self) -> Box<[u8]> {
+        let Self { mut ptr } = self;
+        Box::from_raw(ptr.as_mut())
     }
 }
 
@@ -72,15 +88,15 @@ impl OutUninitHeap {
 impl IOBuf for OutUninitHeap {
     #[inline(always)]
     fn len(&self) -> usize {
-        self.len
+        self.ptr.len()
     }
 
     #[inline(always)]
     fn exec(&mut self, buf_part: &mut [u8], iobuf_offset: usize, len: usize) {
         unsafe {
-            ptr::copy_nonoverlapping(
+            copy_nonoverlapping(
                 buf_part.as_ptr(),
-                self.ptr.offset(iobuf_offset as isize),
+                self.ptr.as_ptr().cast::<u8>().offset(iobuf_offset as isize),
                 len,
             );
         }
@@ -93,6 +109,6 @@ pub trait SqueezeInitHeap<const N: usize>: Foldable + Switch {
         self.switch::<Squeezing>();
         let mut out = OutUninitHeap::new(len);
         self.fold(&mut out);
-        out.finish()
+        unsafe { out.finish() }
     }
 }
