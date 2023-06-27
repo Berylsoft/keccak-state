@@ -60,12 +60,12 @@ fn copy(dst: &mut [u8], src: &[u8], len: usize) {
     dst.copy_from_slice(src)
 }
 
-trait IOBuf {
+pub trait IOBuf {
     fn len(&self) -> usize;
     fn exec(&mut self, buf_part: &mut [u8], iobuf_offset: usize, len: usize);
 }
 
-struct In<'b, const F: bool>(&'b [u8]);
+pub struct In<'b, const F: bool>(pub &'b [u8]);
 
 impl<'b, const F: bool> IOBuf for In<'b, F> {
     #[inline(always)]
@@ -79,7 +79,7 @@ impl<'b, const F: bool> IOBuf for In<'b, F> {
     }
 }
 
-struct Out<'b, const F: bool>(&'b mut [u8]);
+pub struct Out<'b, const F: bool>(pub &'b mut [u8]);
 
 impl<'b, const F: bool> IOBuf for Out<'b, F> {
     #[inline(always)]
@@ -93,7 +93,7 @@ impl<'b, const F: bool> IOBuf for Out<'b, F> {
     }
 }
 
-struct Skip(usize);
+pub struct Skip(pub usize);
 
 impl IOBuf for Skip {
     #[inline(always)]
@@ -149,26 +149,56 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         }
     }
 
-    fn fold(&mut self, iobuf: &mut impl IOBuf) {
-        let mut iobuf_offset = 0;
-        let mut iobuf_rest = iobuf.len();
-        let mut len = R - self.offset;
-        while iobuf_rest >= len {
-            iobuf.exec(&mut self.buf[self.offset..], iobuf_offset, len);
-            self.permute();
-            iobuf_offset += len;
-            iobuf_rest -= len;
-            len = R;
-        }
-        iobuf.exec(&mut self.buf[self.offset..], iobuf_offset, iobuf_rest);
-        self.offset += iobuf_rest;
-    }
-
     fn pad(&mut self) {
         self.buf[self.offset] ^= self.delim;
         self.buf[R - 1] ^= 0x80;
     }
 
+    pub fn change_delim(self, delim: u8) -> Self {
+        let KeccakState { buf, offset, mode, delim: _ } = self;
+        KeccakState { buf, offset, mode, delim }
+    }
+}
+
+// endregion
+
+trait FoldableUser<const R: usize> {
+    /// permute and offset = 0
+    fn permute(&mut self);
+
+    /// &mut buf[offset..]
+    fn part(&mut self) -> &mut [u8];
+
+    fn get_offset(&self) -> usize;
+
+    /// offset += rest
+    fn set_rest(&mut self, rest: usize);
+
+    fn fold_impl<B: IOBuf>(&mut self, iobuf: &mut B) {
+        let mut iobuf_offset = 0;
+        let mut iobuf_rest = iobuf.len();
+        let mut len = R - self.get_offset();
+        while iobuf_rest >= len {
+            iobuf.exec(self.part(), iobuf_offset, len);
+            self.permute();
+            iobuf_offset += len;
+            iobuf_rest -= len;
+            len = R;
+        }
+        iobuf.exec(self.part(), iobuf_offset, iobuf_rest);
+        self.set_rest(iobuf_rest);
+    }
+}
+
+pub trait Foldable {
+    fn fold<B: IOBuf>(&mut self, iobuf: &mut B);
+}
+
+pub trait Switch {
+    fn switch<const M: bool>(&mut self);
+}
+
+impl<const P: bool, const R: usize> FoldableUser<R> for KeccakState<P, R> {
     fn permute(&mut self) {
         let words: &mut [u64; WORDS(BITS)] = unsafe { core::mem::transmute(&mut self.buf) };
         #[cfg(target_endian = "big")]
@@ -190,6 +220,30 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
         self.offset = 0;
     }
 
+    #[inline(always)]
+    fn part(&mut self) -> &mut [u8] {
+        &mut self.buf[self.offset..]
+    }
+
+    #[inline(always)]
+    fn get_offset(&self) -> usize {
+        self.offset
+    }
+
+    #[inline(always)]
+    fn set_rest(&mut self, rest: usize) {
+        self.offset += rest;
+    }
+}
+
+impl<const P: bool, const R: usize> Foldable for KeccakState<P, R> {
+    #[inline(always)]
+    fn fold<B: IOBuf>(&mut self, iobuf: &mut B) {
+        self.fold_impl(iobuf)
+    }
+}
+
+impl<const P: bool, const R: usize> Switch for KeccakState<P, R> {
     #[inline]
     fn switch<const M: bool>(&mut self) {
         if self.mode != M {
@@ -200,14 +254,7 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
             self.mode = M;
         }
     }
-
-    pub fn change_delim(self, delim: u8) -> Self {
-        let KeccakState { buf, offset, mode, delim: _ } = self;
-        KeccakState { buf, offset, mode, delim }
-    }
 }
-
-// endregion
 
 // region: traits
 
@@ -279,14 +326,14 @@ impl<T: Absorb> AbsorbSeed for T {}
 
 // region: trait impls
 
-impl<const P: bool, const R: usize> Absorb for KeccakState<P, R> {
+impl<T: Foldable + Switch> Absorb for T {
     fn absorb(&mut self, input: &[u8]) {
         self.switch::<Absorbing>();
         self.fold(&mut In::<XOR>(input));
     }
 }
 
-impl<const P: bool, const R: usize> AbsorbZero for KeccakState<P, R> {
+impl<T: Foldable + Switch> AbsorbZero for T {
     fn absorb_zero(&mut self, len: usize) {
         self.switch::<Absorbing>();
         self.fold(&mut Skip(len));
@@ -299,21 +346,21 @@ impl<const P: bool, const R: usize> FillBlock for KeccakState<P, R> {
     }
 }
 
-impl<const P: bool, const R: usize> Squeeze for KeccakState<P, R> {
+impl<T: Foldable + Switch> Squeeze for T {
     fn squeeze(&mut self, output: &mut [u8]) {
         self.switch::<Squeezing>();
         self.fold(&mut Out::<COPY>(output));
     }
 }
 
-impl<const P: bool, const R: usize> SqueezeXor for KeccakState<P, R> {
+impl<T: Foldable + Switch> SqueezeXor for T {
     fn squeeze_xor(&mut self, output: &mut [u8]) {
         self.switch::<Squeezing>();
         self.fold(&mut Out::<XOR>(output));
     }
 }
 
-impl<const P: bool, const R: usize> SqueezeSkip for KeccakState<P, R> {
+impl<T: Foldable + Switch> SqueezeSkip for T {
     fn squeeze_skip(&mut self, len: usize) {
         self.switch::<Squeezing>();
         self.fold(&mut Skip(len));
@@ -332,3 +379,5 @@ impl<const P: bool, const R: usize> Reset for KeccakState<P, R> {
 }
 
 // endregion
+
+pub mod out_uninit;

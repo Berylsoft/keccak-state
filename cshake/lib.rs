@@ -5,7 +5,7 @@
 #[cfg(feature = "zeroize-on-drop")] use zeroize::Zeroize;
 pub use keccak_state::{self, Absorb, FillBlock, Squeeze, SqueezeXor, SqueezeSkip, Reset};
 #[cfg(feature = "seed")] pub use keccak_state::AbsorbSeed;
-use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE, BYTES, BITS};
+use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE, BYTES, BITS, Foldable, IOBuf, Switch};
 
 // region: encode len
 
@@ -93,10 +93,17 @@ impl<C: CShakeCustom> CShake<C> {
 
 // region: trait impls
 
-impl<C: CShakeCustom> Absorb for CShake<C> {
+impl<C: CShakeCustom> Foldable for CShake<C> {
     #[inline(always)]
-    fn absorb(&mut self, input: &[u8]) {
-        self.ctx.absorb(input);
+    fn fold<B: IOBuf>(&mut self, iobuf: &mut B) {
+        self.ctx.fold(iobuf)
+    }
+}
+
+impl<C: CShakeCustom> Switch for CShake<C> {
+    #[inline(always)]
+    fn switch<const M: bool>(&mut self) {
+        self.ctx.switch::<M>()
     }
 }
 
@@ -104,27 +111,6 @@ impl<C: CShakeCustom> FillBlock for CShake<C> {
     #[inline(always)]
     fn fill_block(&mut self) {
         self.ctx.fill_block();
-    }
-}
-
-impl<C: CShakeCustom> Squeeze for CShake<C> {
-    #[inline(always)]
-    fn squeeze(&mut self, output: &mut [u8]) {
-        self.ctx.squeeze(output);
-    }
-}
-
-impl<C: CShakeCustom> SqueezeXor for CShake<C> {
-    #[inline(always)]
-    fn squeeze_xor(&mut self, output: &mut [u8]) {
-        self.ctx.squeeze_xor(output);
-    }
-}
-
-impl<C: CShakeCustom> SqueezeSkip for CShake<C> {
-    #[inline(always)]
-    fn squeeze_skip(&mut self, len: usize) {
-        self.ctx.squeeze_skip(len)
     }
 }
 
