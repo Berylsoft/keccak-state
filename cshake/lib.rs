@@ -3,7 +3,7 @@
 #[cfg(feature = "alloc")] extern crate alloc;
 #[cfg(feature = "std")] extern crate std;
 #[cfg(feature = "zeroize-on-drop")] use zeroize::Zeroize;
-pub use keccak_state::{self, Absorb, FillBlock, Squeeze, SqueezeXor, SqueezeSkip, Reset};
+pub use keccak_state::{self, Absorb, Squeeze, SqueezeXor, SqueezeSkip, Reset};
 #[cfg(feature = "seed")] pub use keccak_state::AbsorbSeed;
 use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE, BYTES, BITS, Foldable, IOBuf, Switch};
 
@@ -98,19 +98,17 @@ impl<C: CShakeCustom> Foldable for CShake<C> {
     fn fold<B: IOBuf>(&mut self, iobuf: &mut B) {
         self.ctx.fold(iobuf)
     }
+
+    #[inline(always)]
+    fn fill_block(&mut self) {
+        self.ctx.fill_block();
+    }
 }
 
 impl<C: CShakeCustom> Switch for CShake<C> {
     #[inline(always)]
     fn switch<const M: bool>(&mut self) {
         self.ctx.switch::<M>()
-    }
-}
-
-impl<C: CShakeCustom> FillBlock for CShake<C> {
-    #[inline(always)]
-    fn fill_block(&mut self) {
-        self.ctx.fill_block();
     }
 }
 

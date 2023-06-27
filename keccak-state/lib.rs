@@ -192,9 +192,11 @@ trait FoldableUser<const R: usize> {
 
 pub trait Foldable {
     fn fold<B: IOBuf>(&mut self, iobuf: &mut B);
+
+    fn fill_block(&mut self);
 }
 
-pub trait Switch {
+pub trait Switch: Foldable {
     fn switch<const M: bool>(&mut self);
 }
 
@@ -241,6 +243,11 @@ impl<const P: bool, const R: usize> Foldable for KeccakState<P, R> {
     fn fold<B: IOBuf>(&mut self, iobuf: &mut B) {
         self.fold_impl(iobuf)
     }
+
+    #[inline(always)]
+    fn fill_block(&mut self) {
+        self.permute();
+    }
 }
 
 impl<const P: bool, const R: usize> Switch for KeccakState<P, R> {
@@ -268,12 +275,9 @@ pub trait Absorb: Sized {
     }
 }
 
+// TODO merge to Absorb after Foldable complete
 pub trait AbsorbZero {
     fn absorb_zero(&mut self, len: usize);
-}
-
-pub trait FillBlock {
-    fn fill_block(&mut self);
 }
 
 pub trait Squeeze {
@@ -295,10 +299,12 @@ pub trait Squeeze {
     }
 }
 
+// TODO merge to Squeeze after Foldable complete
 pub trait SqueezeXor {
     fn squeeze_xor(&mut self, output: &mut [u8]);
 }
 
+// TODO merge to Squeeze after Foldable complete
 pub trait SqueezeSkip {
     fn squeeze_skip(&mut self, len: usize);
 }
@@ -307,6 +313,7 @@ pub trait Reset {
     fn reset(&mut self);
 }
 
+// TODO merge to Absorb after Foldable complete
 #[cfg(feature = "seed")]
 pub trait AbsorbSeed: Absorb {
     fn absorb_seed<const N: usize>(&mut self) {
@@ -337,12 +344,6 @@ impl<T: Foldable + Switch> AbsorbZero for T {
     fn absorb_zero(&mut self, len: usize) {
         self.switch::<Absorbing>();
         self.fold(&mut Skip(len));
-    }
-}
-
-impl<const P: bool, const R: usize> FillBlock for KeccakState<P, R> {
-    fn fill_block(&mut self) {
-        self.permute();
     }
 }
 
@@ -379,5 +380,3 @@ impl<const P: bool, const R: usize> Reset for KeccakState<P, R> {
 }
 
 // endregion
-
-pub mod out_uninit;

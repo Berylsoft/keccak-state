@@ -13,7 +13,7 @@ impl<const N: usize> OutUninitStack<N> {
     }
 
     fn finish(self) -> [u8; N] {
-        let Self { mut data } = self;
+        let Self { data } = self;
         let res = unsafe { (data.as_ptr() as *const [u8; N]).read() };
         mem::forget(data);
         res
