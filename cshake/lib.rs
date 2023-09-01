@@ -171,7 +171,7 @@ macro_rules! cshake_customs {
         #[allow(non_camel_case_types)]
         pub struct $name;
 
-        impl CShakeCustom for $name {
+        impl $crate::CShakeCustom for $name {
             fn custom_string(&self) -> &'static [u8] {
                 concat!($prefix, stringify!($name)).as_bytes()
             }
