@@ -59,22 +59,22 @@ impl<C: CShakeCustom> CShake<C> {
     }
 
     fn init(&mut self) {
-        if !C::is_empty() {
+        if !self.custom.is_empty() {
             self.ctx.absorb_len_left(R);
-            self.ctx.absorb_len_left(C::NAME.len() * 8);
-            self.ctx.absorb(C::NAME.as_bytes());
-            self.ctx.absorb_len_left(C::CUSTOM_STRING.len() * 8);
-            self.ctx.absorb(C::CUSTOM_STRING.as_bytes());
+            self.ctx.absorb_len_left(self.custom.name().len() * 8);
+            self.ctx.absorb(self.custom.name());
+            self.ctx.absorb_len_left(self.custom.custom_string().len() * 8);
+            self.ctx.absorb(self.custom.custom_string());
             self.ctx.fill_block();
         }
     }
 
     pub fn create_with_initial(custom: C, initial: [u8; BYTES(BITS)]) -> Self {
-        CShake { ctx: KeccakState::with_initial(C::delim(), initial), custom }
+        CShake { ctx: KeccakState::with_initial(custom.delim(), initial), custom }
     }
 
     pub fn create(custom: C) -> CShake<C> {
-        let mut _self = CShake { ctx: KeccakState::new(C::delim()), custom };
+        let mut _self = CShake { ctx: KeccakState::new(custom.delim()), custom };
         _self.init();
         _self
     }
@@ -124,24 +124,25 @@ impl<C: CShakeCustom> Reset for CShake<C> {
 // region: custom
 
 pub trait CShakeCustom: Sized {
-    const NAME: &'static str = "";
-    const CUSTOM_STRING: &'static str;
-    const INITIAL: Option<&'static [u8; BYTES(BITS)]> = None;
+    fn name(&self) -> &[u8] { &[] }
+    fn custom_string(&self) -> &[u8];
+    fn initial(&self) -> Option<&[u8; BYTES(BITS)]> { None }
 
-    /* const */ fn is_empty() -> bool {
-        Self::NAME.is_empty() && Self::CUSTOM_STRING.is_empty()
+    /* const */ fn is_empty(&self) -> bool {
+        self.name().is_empty() && self.custom_string().is_empty()
     }
 
-    /* const */ fn delim() -> u8 {
+    /* const */ fn delim(&self) -> u8 {
         // if there is no name and no customization string
         // cSHAKE is SHAKE
-        if Self::is_empty() { DSHAKE } else { DCSHAKE }
+        if self.is_empty() { DSHAKE } else { DCSHAKE }
     }
 
     #[inline]
     fn create(self) -> CShake<Self> {
-        if let Some(initial) = Self::INITIAL {
-            CShake::create_with_initial(self, *initial)
+        if let Some(initial) = self.initial() {
+            let initial = *initial;
+            CShake::create_with_initial(self, initial)
         } else {
             CShake::create(self)
         }
@@ -161,7 +162,7 @@ pub trait CShakeCustom: Sized {
 pub struct NoCustom;
 
 impl CShakeCustom for NoCustom {
-    const CUSTOM_STRING: &'static str = "";
+    fn custom_string(&self) -> &'static [u8] { &[] }
 }
 
 #[macro_export]
@@ -171,10 +172,56 @@ macro_rules! cshake_customs {
         pub struct $name;
 
         impl CShakeCustom for $name {
-            const CUSTOM_STRING: &'static str = concat!($prefix, stringify!($name));
+            fn custom_string(&self) -> &'static [u8] {
+                concat!($prefix, stringify!($name)).as_bytes()
+            }
         }
     )*};
 }
+
+#[cfg(feature = "alloc")]
+mod owned_custom {
+    use alloc::sync::Arc;
+    use crate::{CShakeCustom, BYTES, BITS};
+
+    #[derive(Clone)]
+    pub struct OwnedCustom {
+        name: Option<Arc<[u8]>>,
+        custom_string: Option<Arc<[u8]>>,
+        initial: Option<Arc<[u8; BYTES(BITS)]>>,
+    }
+
+    impl OwnedCustom {
+        pub fn new(
+            name: Option<&[u8]>,
+            custom_string: Option<&[u8]>,
+            initial: Option<&[u8; BYTES(BITS)]>,
+        ) -> Self {
+            OwnedCustom {
+                name: name.map(From::from),
+                custom_string: custom_string.map(From::from),
+                initial: initial.map(Clone::clone).map(From::from),
+            }
+        }
+    }
+
+    impl CShakeCustom for OwnedCustom {
+        fn name(&self) -> &[u8] {
+            self.name.as_deref().unwrap_or(&[])
+        }
+
+        fn custom_string(&self) -> &[u8] {
+            self.custom_string.as_deref().unwrap_or(&[])
+        }
+
+        fn initial(&self) -> Option<&[u8; BYTES(BITS)]> {
+            self.initial.as_deref()
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+pub use owned_custom::OwnedCustom;
 
 // endregion
 
