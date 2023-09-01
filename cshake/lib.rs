@@ -177,6 +177,16 @@ macro_rules! cshake_customs {
             }
         }
     )*};
+    ($($name:ident -> $custom:literal)*) => {$(
+        #[allow(non_camel_case_types)]
+        pub struct $name;
+
+        impl $crate::CShakeCustom for $name {
+            fn custom_string(&self) -> &'static [u8] {
+                $custom.as_bytes()
+            }
+        }
+    )*};
 }
 
 #[cfg(feature = "alloc")]
