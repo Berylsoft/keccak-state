@@ -182,7 +182,7 @@ macro_rules! cshake_customs {
 #[cfg(feature = "alloc")]
 mod owned_custom {
     use alloc::sync::Arc;
-    use crate::{CShakeCustom, BYTES, BITS};
+    use crate::{CShake, CShakeCustom, BYTES, BITS};
 
     #[derive(Clone)]
     pub struct OwnedCustom {
@@ -202,6 +202,21 @@ mod owned_custom {
                 custom_string: custom_string.map(From::from),
                 initial: initial.map(Clone::clone).map(From::from),
             }
+        }
+
+        pub fn new_with_create_initial(
+            name: Option<&[u8]>,
+            custom_string: Option<&[u8]>,
+        ) -> Self {
+            let _self = OwnedCustom {
+                name: name.map(From::from),
+                custom_string: custom_string.map(From::from),
+                initial: None,
+            };
+            let CShake { ctx, custom: mut _self } = _self.create();
+            let initial = ctx.to_initial().unwrap();
+            let _ = core::mem::replace(&mut _self.initial, Some(Arc::new(initial)));
+            _self
         }
     }
 
