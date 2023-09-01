@@ -162,34 +162,6 @@ impl<const P: bool, const R: usize> KeccakState<P, R> {
 
 // endregion
 
-trait FoldableUser<const R: usize> {
-    /// permute and offset = 0
-    fn permute(&mut self);
-
-    /// &mut buf[offset..]
-    fn part(&mut self) -> &mut [u8];
-
-    fn get_offset(&self) -> usize;
-
-    /// offset += rest
-    fn set_rest(&mut self, rest: usize);
-
-    fn fold_impl<B: IOBuf>(&mut self, iobuf: &mut B) {
-        let mut iobuf_offset = 0;
-        let mut iobuf_rest = iobuf.len();
-        let mut len = R - self.get_offset();
-        while iobuf_rest >= len {
-            iobuf.exec(self.part(), iobuf_offset, len);
-            self.permute();
-            iobuf_offset += len;
-            iobuf_rest -= len;
-            len = R;
-        }
-        iobuf.exec(self.part(), iobuf_offset, iobuf_rest);
-        self.set_rest(iobuf_rest);
-    }
-}
-
 pub trait Foldable {
     fn fold<B: IOBuf>(&mut self, iobuf: &mut B);
 
@@ -200,8 +172,23 @@ pub trait Switch: Foldable {
     fn switch<const M: bool>(&mut self);
 }
 
-impl<const P: bool, const R: usize> FoldableUser<R> for KeccakState<P, R> {
-    fn permute(&mut self) {
+impl<const P: bool, const R: usize> Foldable for KeccakState<P, R> {
+    fn fold<B: IOBuf>(&mut self, iobuf: &mut B) {
+        let mut iobuf_offset = 0;
+        let mut iobuf_rest = iobuf.len();
+        let mut len = R - self.offset;
+        while iobuf_rest >= len {
+            iobuf.exec(&mut self.buf[self.offset..], iobuf_offset, len);
+            self.fill_block();
+            iobuf_offset += len;
+            iobuf_rest -= len;
+            len = R;
+        }
+        iobuf.exec(&mut self.buf[self.offset..], iobuf_offset, iobuf_rest);
+        self.offset += iobuf_rest;
+    }
+
+    fn fill_block(&mut self) {
         let words: &mut [u64; WORDS(BITS)] = unsafe { core::mem::transmute(&mut self.buf) };
         #[cfg(target_endian = "big")]
         #[inline]
@@ -220,33 +207,6 @@ impl<const P: bool, const R: usize> FoldableUser<R> for KeccakState<P, R> {
         #[cfg(target_endian = "big")]
         swap_endianess(words);
         self.offset = 0;
-    }
-
-    #[inline(always)]
-    fn part(&mut self) -> &mut [u8] {
-        &mut self.buf[self.offset..]
-    }
-
-    #[inline(always)]
-    fn get_offset(&self) -> usize {
-        self.offset
-    }
-
-    #[inline(always)]
-    fn set_rest(&mut self, rest: usize) {
-        self.offset += rest;
-    }
-}
-
-impl<const P: bool, const R: usize> Foldable for KeccakState<P, R> {
-    #[inline(always)]
-    fn fold<B: IOBuf>(&mut self, iobuf: &mut B) {
-        self.fold_impl(iobuf)
-    }
-
-    #[inline(always)]
-    fn fill_block(&mut self) {
-        self.permute();
     }
 }
 
