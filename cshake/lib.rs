@@ -3,7 +3,7 @@
 #[cfg(feature = "alloc")] extern crate alloc;
 #[cfg(feature = "std")] extern crate std;
 #[cfg(feature = "zeroize-on-drop")] use zeroize::Zeroize;
-pub use keccak_state::{self, Absorb, Squeeze, SqueezeXor, SqueezeSkip, Reset};
+pub use keccak_state::{self, Absorb, AbsorbZero, Squeeze, SqueezeXor, SqueezeSkip, Reset};
 #[cfg(feature = "seed")] pub use keccak_state::AbsorbSeed;
 use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE, BYTES, BITS, Foldable, IOBuf, Switch};
 
