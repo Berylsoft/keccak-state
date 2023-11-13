@@ -18,4 +18,3 @@ getrandom = { version = "0.2.9", optional = true }
 alloc = []
 zeroize-on-drop = ["zeroize"]
 seed = ["getrandom"]
-portable-simd = ["keccak/simd"]
