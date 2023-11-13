@@ -11,5 +11,6 @@ resolver = "2"
 members = [
     "keccak-state",
     "cshake",
+    "cshake-web",
     "pseudo-rand",
 ]
