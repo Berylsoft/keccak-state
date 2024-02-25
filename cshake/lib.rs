@@ -124,6 +124,7 @@ impl<C: CShakeCustom> Reset for CShake<C> {
 // region: custom
 
 pub trait CShakeCustom: Sized {
+    /* const? */ fn rate(&self) -> usize { R256 }
     fn name(&self) -> &[u8] { &[] }
     fn custom_string(&self) -> &[u8];
     fn initial(&self) -> Option<&[u8; BYTES(BITS)]> { None }
