@@ -1,5 +1,5 @@
 use crate::{IOBuf, Foldable, Switch, Squeezing};
-use core::{mem::{self, MaybeUninit}, ptr::copy_nonoverlapping};
+use core::{mem::MaybeUninit, ptr::copy_nonoverlapping};
 #[cfg(feature = "alloc")] use core::{alloc::Layout, ptr::NonNull};
 #[cfg(feature = "alloc")] use alloc::{alloc::{alloc, handle_alloc_error}, boxed::Box};
 
@@ -17,9 +17,7 @@ impl<const N: usize> OutUninitStack<N> {
     unsafe fn finish(self) -> [u8; N] {
         let Self { data } = self;
         // use data.array_assume_init() when stable
-        let res = (data.as_ptr() as *const [u8; N]).read();
-        mem::forget(data);
-        res
+        (data.as_ptr() as *const [u8; N]).read()
     }
 }
 
@@ -34,7 +32,7 @@ impl<const N: usize> IOBuf for OutUninitStack<N> {
         unsafe {
             copy_nonoverlapping(
                 buf_part.as_ptr(),
-                self.data.as_mut_ptr().cast::<u8>().offset(iobuf_offset as isize),
+                self.data.as_mut_ptr().cast::<u8>().add(iobuf_offset),
                 len,
             );
         }
@@ -59,6 +57,7 @@ fn capacity_overflow() -> ! {
 
 #[cfg(feature = "alloc")]
 fn alloc_bytes(len: usize) -> NonNull<[u8]> {
+    assert_ne!(len, 0);
     let layout = Layout::array::<u8>(len).unwrap_or_else(|_| capacity_overflow());
     // use <alloc::alloc::Global as core::alloc::Allocator>::alloc when stable
     let raw_ptr = unsafe { alloc(layout) };
@@ -96,7 +95,7 @@ impl IOBuf for OutUninitHeap {
         unsafe {
             copy_nonoverlapping(
                 buf_part.as_ptr(),
-                self.ptr.as_ptr().cast::<u8>().offset(iobuf_offset as isize),
+                self.ptr.as_ptr().cast::<u8>().add(iobuf_offset),
                 len,
             );
         }

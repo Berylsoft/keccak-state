@@ -60,6 +60,7 @@ fn copy(dst: &mut [u8], src: &[u8], len: usize) {
     dst.copy_from_slice(src)
 }
 
+#[allow(clippy::len_without_is_empty)]
 pub trait IOBuf {
     fn len(&self) -> usize;
     fn exec(&mut self, buf_part: &mut [u8], iobuf_offset: usize, len: usize);
