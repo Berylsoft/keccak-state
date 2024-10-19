@@ -1,5 +1,7 @@
-#![no_std]
 #![allow(non_upper_case_globals, non_snake_case)]
+#![deny(unused_results)]
+
+#![no_std]
 
 #[cfg(feature = "alloc")] extern crate alloc;
 #[cfg(feature = "zeroize-on-drop")] use zeroize::Zeroize;
