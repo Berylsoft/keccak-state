@@ -192,89 +192,101 @@ macro_rules! cshake_customs {
     )*};
 }
 
-#[derive(Clone)]
-pub struct StaticCustom {
-    name: &'static [u8],
-    custom_string: &'static [u8],
-    initial: Option<[u8; BYTES(BITS)]>,
-}
+mod static_custom {
+    use crate::{CShake, CShakeCustom, BYTES, BITS};
 
-impl StaticCustom {
-    pub const fn new(
+    #[derive(Clone)]
+    pub struct StaticCustom {
         name: &'static [u8],
         custom_string: &'static [u8],
         initial: Option<[u8; BYTES(BITS)]>,
-    ) -> Self {
-        StaticCustom { name, custom_string, initial }
     }
 
-    pub fn new_with_create_initial(
-        name: &'static [u8],
-        custom_string: &'static [u8],
-    ) -> Self {
-        let _self = StaticCustom { name, custom_string, initial: None };
-        let CShake { ctx, custom: mut _self } = _self.create();
-        let initial = ctx.to_initial().unwrap();
-        let _ = core::mem::replace(&mut _self.initial, Some(initial));
-        _self
+    impl StaticCustom {
+        pub const fn new(
+            name: &'static [u8],
+            custom_string: &'static [u8],
+            initial: Option<[u8; BYTES(BITS)]>,
+        ) -> Self {
+            StaticCustom { name, custom_string, initial }
+        }
+
+        pub fn new_with_create_initial(
+            name: &'static [u8],
+            custom_string: &'static [u8],
+        ) -> Self {
+            let _self = StaticCustom { name, custom_string, initial: None };
+            let CShake { ctx, custom: mut _self } = _self.create();
+            let initial = ctx.to_initial().unwrap();
+            let _ = core::mem::replace(&mut _self.initial, Some(initial));
+            _self
+        }
+    }
+
+    impl CShakeCustom for StaticCustom {
+        fn name(&self) -> &[u8] {
+            self.name.as_ref()
+        }
+
+        fn custom_string(&self) -> &[u8] {
+            self.custom_string.as_ref()
+        }
+
+        fn initial(&self) -> Option<&[u8; BYTES(BITS)]> {
+            self.initial.as_ref()
+        }
     }
 }
 
-impl CShakeCustom for StaticCustom {
-    fn name(&self) -> &[u8] {
-        self.name.as_ref()
-    }
+pub use static_custom::StaticCustom;
 
-    fn custom_string(&self) -> &[u8] {
-        self.custom_string.as_ref()
-    }
+mod array_custom {
+    use crate::{CShake, CShakeCustom, BYTES, BITS};
 
-    fn initial(&self) -> Option<&[u8; BYTES(BITS)]> {
-        self.initial.as_ref()
-    }
-}
-
-#[derive(Clone)]
-pub struct ArrayCustom<const L1: usize, const L2: usize> {
-    name: [u8; L1],
-    custom_string: [u8; L2],
-    initial: Option<[u8; BYTES(BITS)]>,
-}
-
-impl<const L1: usize, const L2: usize> ArrayCustom<L1, L2> {
-    pub const fn new(
+    #[derive(Clone)]
+    pub struct ArrayCustom<const L1: usize, const L2: usize> {
         name: [u8; L1],
         custom_string: [u8; L2],
         initial: Option<[u8; BYTES(BITS)]>,
-    ) -> Self {
-        ArrayCustom { name, custom_string, initial }
     }
 
-    pub fn new_with_create_initial(
-        name: [u8; L1],
-        custom_string: [u8; L2],
-    ) -> Self {
-        let _self = ArrayCustom { name, custom_string, initial: None };
-        let CShake { ctx, custom: mut _self } = _self.create();
-        let initial = ctx.to_initial().unwrap();
-        let _ = core::mem::replace(&mut _self.initial, Some(initial));
-        _self
+    impl<const L1: usize, const L2: usize> ArrayCustom<L1, L2> {
+        pub const fn new(
+            name: [u8; L1],
+            custom_string: [u8; L2],
+            initial: Option<[u8; BYTES(BITS)]>,
+        ) -> Self {
+            ArrayCustom { name, custom_string, initial }
+        }
+
+        pub fn new_with_create_initial(
+            name: [u8; L1],
+            custom_string: [u8; L2],
+        ) -> Self {
+            let _self = ArrayCustom { name, custom_string, initial: None };
+            let CShake { ctx, custom: mut _self } = _self.create();
+            let initial = ctx.to_initial().unwrap();
+            let _ = core::mem::replace(&mut _self.initial, Some(initial));
+            _self
+        }
+    }
+
+    impl<const L1: usize, const L2: usize> CShakeCustom for ArrayCustom<L1, L2> {
+        fn name(&self) -> &[u8] {
+            self.name.as_ref()
+        }
+
+        fn custom_string(&self) -> &[u8] {
+            self.custom_string.as_ref()
+        }
+
+        fn initial(&self) -> Option<&[u8; BYTES(BITS)]> {
+            self.initial.as_ref()
+        }
     }
 }
 
-impl<const L1: usize, const L2: usize> CShakeCustom for ArrayCustom<L1, L2> {
-    fn name(&self) -> &[u8] {
-        self.name.as_ref()
-    }
-
-    fn custom_string(&self) -> &[u8] {
-        self.custom_string.as_ref()
-    }
-
-    fn initial(&self) -> Option<&[u8; BYTES(BITS)]> {
-        self.initial.as_ref()
-    }
-}
+pub use array_custom::ArrayCustom;
 
 #[cfg(feature = "alloc")]
 mod owned_custom {
