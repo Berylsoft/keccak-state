@@ -50,7 +50,6 @@ pub trait SqueezeInitStack<const N: usize>: Foldable + Switch {
 
 // alloc::raw_vec::capacity_overflow
 #[cfg(feature = "alloc")]
-#[cfg(not(no_global_oom_handling))]
 fn capacity_overflow() -> ! {
     panic!("capacity overflow");
 }
