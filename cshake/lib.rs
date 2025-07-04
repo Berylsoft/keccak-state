@@ -431,3 +431,6 @@ pub mod rand {
     #[cfg(feature = "std")]
     pub use thread::*;
 }
+
+#[cfg(test)]
+mod tests;
