@@ -14,4 +14,7 @@ crate-type = ["cdylib"]
 wasm-bindgen = "0.2"
 cshake = { path = "../cshake", features = ["alloc"] }
 
+[dev-dependencies]
+hex-literal = "1"
+
 [features]
