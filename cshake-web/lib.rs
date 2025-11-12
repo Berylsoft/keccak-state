@@ -1,9 +1,9 @@
-use cshake::{CShakeCustom, NoCustom, Absorb, Squeeze};
+use cshake::{CShakeCustom, OwnedCustom, Absorb, Squeeze};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub fn shake256_once(data: &[u8], len: u32) -> Vec<u8> {
-    NoCustom
+    OwnedCustom::new(None, None, None)
         .create()
         .chain_absorb(data)
         .squeeze_to_vec(len as usize)
