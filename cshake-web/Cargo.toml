@@ -10,9 +10,6 @@ repository = "https://github.com/Berylsoft/keccak-state"
 path = "lib.rs"
 crate-type = ["cdylib"]
 
-[profile.release]
-lto = true
-
 [dependencies]
 wasm-bindgen = "0.2"
 cshake = { path = "../cshake", features = ["alloc"] }
