@@ -280,10 +280,9 @@ pub trait Reset {
 #[cfg(feature = "seed")]
 pub trait AbsorbSeed: Absorb {
     fn absorb_seed<const N: usize>(&mut self) {
-        use core::mem::MaybeUninit;
-        let mut buf: [MaybeUninit<u8>; N] = unsafe { MaybeUninit::uninit().assume_init() };
-        let ready_buf = getrandom::fill_uninit(&mut buf).unwrap();
-        self.absorb(ready_buf);
+        let mut buf: [u8; N] = [0; N];
+        getrandom::fill(&mut buf).unwrap();
+        self.absorb(&buf);
         #[cfg(feature = "zeroize-on-drop")]
         buf.zeroize();
     }
