@@ -56,9 +56,8 @@ impl Context {
         self.0.squeeze_to_vec(len as usize)
     }
 
-    pub fn squeeze_xor(&mut self, mut output: Box<[u8]>) -> Box<[u8]> {
-        self.0.squeeze_xor(output.as_mut());
-        output
+    pub fn squeeze_xor(&mut self, output: &mut [u8]) {
+        self.0.squeeze_xor(output);
     }
 
     pub fn squeeze_skip(&mut self, len: u32) {
@@ -84,5 +83,15 @@ mod tests {
             Custom::from_string(Some("test".to_owned()), Some("test".to_owned())).once_to_bytes("Hello, World!".as_bytes(), 32),
             hex_literal::hex!("41922b47e8129c3750687c6afcad57ac39dee8a20785ccce324393c787b08552"),
         );
+        {
+            let mut array = [1, 2, 3, 4];
+            Custom::shake().create().chain_absorb("Hello, World!".as_bytes()).squeeze_xor(&mut array);
+            assert_eq!(array, hex_literal::hex!("b2bc94bb"));
+        }
+        {
+            let mut array = [1, 2, 3, 4];
+            Custom::shake().create().chain_absorb("Hello, World!1".as_bytes()).squeeze_xor(&mut array);
+            assert_eq!(array, hex_literal::hex!("67bc1da0"));
+        }
     }
 }
