@@ -14,4 +14,4 @@ function encodeHex(buffer: Uint8Array): string {
 import { Custom } from "./cshake_web.js";
 
 console.log(encodeHex(Custom.shake().once_to_bytes(encodeText("Hello, World!"), 32)));
-console.log(encodeHex(Custom.new("test", "test").once_to_bytes(encodeText("Hello, World!"), 32)));
+console.log(encodeHex(Custom.from_string("test", "test").once_to_bytes(encodeText("Hello, World!"), 32)));

@@ -13,11 +13,11 @@ impl Custom {
         Custom(OwnedCustom::new(None, None, None))
     }
 
-    pub fn new_from_bytes(name: Option<Box<[u8]>>, custom_string: Option<Box<[u8]>>) -> Custom {
+    pub fn from_bytes(name: Option<Box<[u8]>>, custom_string: Option<Box<[u8]>>) -> Custom {
         Custom(OwnedCustom::new(name.as_deref(), custom_string.as_deref(), None))
     }
 
-    pub fn new(name: Option<String>, custom_string: Option<String>) -> Custom {
+    pub fn from_string(name: Option<String>, custom_string: Option<String>) -> Custom {
         Custom(OwnedCustom::new(name.as_ref().map(|s| s.as_bytes()), custom_string.as_ref().map(|s| s.as_bytes()), None))
     }
 
@@ -81,7 +81,7 @@ mod tests {
             hex_literal::hex!("b3be97bfd978833a65588ceae8a34cf59e95585af62063e6b89d0789f372424e"),
         );
         assert_eq!(
-            Custom::new(Some("test".to_owned()), Some("test".to_owned())).once_to_bytes("Hello, World!".as_bytes(), 32),
+            Custom::from_string(Some("test".to_owned()), Some("test".to_owned())).once_to_bytes("Hello, World!".as_bytes(), 32),
             hex_literal::hex!("41922b47e8129c3750687c6afcad57ac39dee8a20785ccce324393c787b08552"),
         );
     }
