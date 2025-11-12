@@ -11,6 +11,7 @@ function encodeHex(buffer: Uint8Array): string {
 // cargo build -p cshake-web --target wasm32-unknown-unknown --release
 // wasm-bindgen --target deno --out-dir path/to/dist path/to/target/wasm32-unknown-unknown/release/cshake_web.wasm
 // @deno-types="./cshake_web.d.ts"
-import { shake256_once } from "./cshake_web.js";
+import { Custom } from "./cshake_web.js";
 
-console.log(encodeHex(shake256_once(encodeText("Hello, World!"), 32)));
+console.log(encodeHex(Custom.shake().once_to_bytes(encodeText("Hello, World!"), 32)));
+console.log(encodeHex(Custom.new("test", "test").once_to_bytes(encodeText("Hello, World!"), 32)));
