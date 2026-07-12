@@ -218,18 +218,18 @@ mod static_custom {
             let _self = StaticCustom { name, custom_string, initial: None };
             let CShake { ctx, custom: mut _self } = _self.create();
             let initial = ctx.to_initial().unwrap();
-            let _ = core::mem::replace(&mut _self.initial, Some(initial));
+            let _ = _self.initial.replace(initial);
             _self
         }
     }
 
     impl CShakeCustom for StaticCustom {
         fn name(&self) -> &[u8] {
-            self.name.as_ref()
+            self.name
         }
 
         fn custom_string(&self) -> &[u8] {
-            self.custom_string.as_ref()
+            self.custom_string
         }
 
         fn initial(&self) -> Option<&[u8; BYTES(BITS)]> {
@@ -266,7 +266,7 @@ mod array_custom {
             let _self = ArrayCustom { name, custom_string, initial: None };
             let CShake { ctx, custom: mut _self } = _self.create();
             let initial = ctx.to_initial().unwrap();
-            let _ = core::mem::replace(&mut _self.initial, Some(initial));
+            let _ = _self.initial.replace(initial);
             _self
         }
     }
@@ -309,7 +309,7 @@ mod owned_custom {
             OwnedCustom {
                 name: name.map(From::from),
                 custom_string: custom_string.map(From::from),
-                initial: initial.map(Clone::clone).map(From::from),
+                initial: initial.copied().map(From::from),
             }
         }
 
@@ -324,7 +324,7 @@ mod owned_custom {
             };
             let CShake { ctx, custom: mut _self } = _self.create();
             let initial = ctx.to_initial().unwrap();
-            let _ = core::mem::replace(&mut _self.initial, Some(Arc::new(initial)));
+            let _ = _self.initial.replace(Arc::new(initial));
             _self
         }
     }
