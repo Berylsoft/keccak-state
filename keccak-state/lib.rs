@@ -57,8 +57,15 @@ pub use FoldMode::*;
 
 impl core::marker::ConstParamTy_ for FoldMode {}
 
-pub const XOR: bool = true;
-pub const COPY: bool = false;
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum IOMode {
+    XOR,
+    COPY,
+}
+
+pub use IOMode::*;
+
+impl core::marker::ConstParamTy_ for IOMode {}
 
 // endregion
 
@@ -84,9 +91,9 @@ pub trait IOBuf {
     fn exec(&mut self, buf_part: &mut [u8], iobuf_offset: usize, len: usize);
 }
 
-pub struct In<'b, const F: bool>(pub &'b [u8]);
+pub struct In<'b, const F: IOMode>(pub &'b [u8]);
 
-impl<'b, const F: bool> IOBuf for In<'b, F> {
+impl<'b, const F: IOMode> IOBuf for In<'b, F> {
     #[inline(always)]
     fn len(&self) -> usize {
         self.0.len()
@@ -98,9 +105,9 @@ impl<'b, const F: bool> IOBuf for In<'b, F> {
     }
 }
 
-pub struct Out<'b, const F: bool>(pub &'b mut [u8]);
+pub struct Out<'b, const F: IOMode>(pub &'b mut [u8]);
 
-impl<'b, const F: bool> IOBuf for Out<'b, F> {
+impl<'b, const F: IOMode> IOBuf for Out<'b, F> {
     #[inline(always)]
     fn len(&self) -> usize {
         self.0.len()
@@ -314,7 +321,7 @@ impl<T: Absorb> AbsorbSeed for T {}
 impl<T: Foldable + Switch> Absorb for T {
     fn absorb(&mut self, input: &[u8]) {
         self.switch::<{ Absorbing }>();
-        self.fold(&mut In::<XOR>(input));
+        self.fold(&mut In::<{ XOR }>(input));
     }
 }
 
@@ -328,14 +335,14 @@ impl<T: Foldable + Switch> AbsorbZero for T {
 impl<T: Foldable + Switch> Squeeze for T {
     fn squeeze(&mut self, output: &mut [u8]) {
         self.switch::<{ Squeezing }>();
-        self.fold(&mut Out::<COPY>(output));
+        self.fold(&mut Out::<{ COPY }>(output));
     }
 }
 
 impl<T: Foldable + Switch> SqueezeXor for T {
     fn squeeze_xor(&mut self, output: &mut [u8]) {
         self.switch::<{ Squeezing }>();
-        self.fold(&mut Out::<XOR>(output));
+        self.fold(&mut Out::<{ XOR }>(output));
     }
 }
 
