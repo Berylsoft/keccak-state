@@ -20,7 +20,7 @@ pub const fn BYTES(bits: usize) -> usize {
     bits / 8
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum KeccakType {
     KeccakF,
     KeccakP,
@@ -47,8 +47,15 @@ pub const DSHA3   : u8 = 0x06;
 pub const DSHAKE  : u8 = 0x1f;
 pub const DCSHAKE : u8 = 0x04;
 
-pub const Absorbing: bool = true;
-pub const Squeezing: bool = false;
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum FoldMode {
+    Absorbing,
+    Squeezing,
+}
+
+pub use FoldMode::*;
+
+impl core::marker::ConstParamTy_ for FoldMode {}
 
 pub const XOR: bool = true;
 pub const COPY: bool = false;
@@ -126,7 +133,7 @@ pub struct KeccakState<const P: KeccakType, const R: usize> {
     buf: [u8; BYTES(BITS)],
     offset: usize,
     delim: u8,
-    mode: bool,
+    mode: FoldMode,
 }
 
 #[cfg(feature = "zeroize-on-drop")]
@@ -181,7 +188,7 @@ pub trait Foldable {
 }
 
 pub trait Switch: Foldable {
-    fn switch<const M: bool>(&mut self);
+    fn switch<const M: FoldMode>(&mut self);
 }
 
 impl<const P: KeccakType, const R: usize> Foldable for KeccakState<P, R> {
@@ -224,7 +231,7 @@ impl<const P: KeccakType, const R: usize> Foldable for KeccakState<P, R> {
 
 impl<const P: KeccakType, const R: usize> Switch for KeccakState<P, R> {
     #[inline]
-    fn switch<const M: bool>(&mut self) {
+    fn switch<const M: FoldMode>(&mut self) {
         if self.mode != M {
             if M == Squeezing {
                 self.pad();
@@ -306,35 +313,35 @@ impl<T: Absorb> AbsorbSeed for T {}
 
 impl<T: Foldable + Switch> Absorb for T {
     fn absorb(&mut self, input: &[u8]) {
-        self.switch::<Absorbing>();
+        self.switch::<{ Absorbing }>();
         self.fold(&mut In::<XOR>(input));
     }
 }
 
 impl<T: Foldable + Switch> AbsorbZero for T {
     fn absorb_zero(&mut self, len: usize) {
-        self.switch::<Absorbing>();
+        self.switch::<{ Absorbing }>();
         self.fold(&mut Skip(len));
     }
 }
 
 impl<T: Foldable + Switch> Squeeze for T {
     fn squeeze(&mut self, output: &mut [u8]) {
-        self.switch::<Squeezing>();
+        self.switch::<{ Squeezing }>();
         self.fold(&mut Out::<COPY>(output));
     }
 }
 
 impl<T: Foldable + Switch> SqueezeXor for T {
     fn squeeze_xor(&mut self, output: &mut [u8]) {
-        self.switch::<Squeezing>();
+        self.switch::<{ Squeezing }>();
         self.fold(&mut Out::<XOR>(output));
     }
 }
 
 impl<T: Foldable + Switch> SqueezeSkip for T {
     fn squeeze_skip(&mut self, len: usize) {
-        self.switch::<Squeezing>();
+        self.switch::<{ Squeezing }>();
         self.fold(&mut Skip(len));
     }
 }

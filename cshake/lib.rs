@@ -2,12 +2,14 @@
 
 #![no_std]
 
+#![feature(adt_const_params)]
+
 #[cfg(feature = "alloc")] extern crate alloc;
 #[cfg(feature = "std")] extern crate std;
 #[cfg(feature = "zeroize-on-drop")] use zeroize::Zeroize;
 pub use keccak_state::{self, Absorb, AbsorbZero, Squeeze, SqueezeXor, SqueezeSkip, Reset};
 #[cfg(feature = "seed")] pub use keccak_state::AbsorbSeed;
-use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE, BYTES, BITS, Foldable, IOBuf, Switch};
+use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE, BYTES, BITS, Foldable, IOBuf, Switch, FoldMode};
 
 // region: encode len
 
@@ -109,7 +111,7 @@ impl<C: CShakeCustom> Foldable for CShake<C> {
 
 impl<C: CShakeCustom> Switch for CShake<C> {
     #[inline(always)]
-    fn switch<const M: bool>(&mut self) {
+    fn switch<const M: FoldMode>(&mut self) {
         self.ctx.switch::<M>()
     }
 }
