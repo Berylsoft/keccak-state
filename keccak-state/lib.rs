@@ -1,4 +1,3 @@
-#![allow(non_upper_case_globals, non_snake_case)]
 #![deny(unused_results)]
 
 #![no_std]
@@ -12,13 +11,17 @@
 
 pub const BITS: usize = 1600;
 
-pub const fn WORDS(bits: usize) -> usize {
+pub const fn words_from_bits(bits: usize) -> usize {
     bits / 64
 }
 
-pub const fn BYTES(bits: usize) -> usize {
+pub const WORDS: usize = words_from_bits(BITS);
+
+pub const fn bytes_from_bits(bits: usize) -> usize {
     bits / 8
 }
+
+pub const BYTES: usize = bytes_from_bits(BITS);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum KeccakType {
@@ -26,40 +29,34 @@ pub enum KeccakType {
     KeccakP,
 }
 
-pub use KeccakType::*;
-
 impl core::marker::ConstParamTy_ for KeccakType {}
 
-pub const fn R(bits: usize) -> usize {
+pub const fn rate_from_bits(bits: usize) -> usize {
     200 - bits / 4
 }
 
 #[repr(usize)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Rate {
-    R128 = R(128),
-    R224 = R(224),
-    R256 = R(256),
-    R288 = R(288),
-    R384 = R(384),
-    R512 = R(512),
-    R544 = R(544),
+    R128 = rate_from_bits(128),
+    R224 = rate_from_bits(224),
+    R256 = rate_from_bits(256),
+    R288 = rate_from_bits(288),
+    R384 = rate_from_bits(384),
+    R512 = rate_from_bits(512),
+    R544 = rate_from_bits(544),
 }
-
-pub use Rate::*;
 
 impl core::marker::ConstParamTy_ for Rate {}
 
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Delim {
-    DKeccak = 0x01,
-    DSHA3   = 0x06,
-    DSHAKE  = 0x1f,
-    DCSHAKE = 0x04,
+    Keccak = 0x01,
+    SHA3   = 0x06,
+    SHAKE  = 0x1f,
+    CSHAKE = 0x04,
 }
-
-pub use Delim::*;
 
 impl core::marker::ConstParamTy_ for Delim {}
 
@@ -153,7 +150,7 @@ impl IOBuf for Skip {
 
 #[derive(Clone)]
 pub struct KeccakState<const P: KeccakType, const R: Rate> {
-    buf: [u8; BYTES(BITS)],
+    buf: [u8; BYTES],
     offset: usize,
     delim: Delim,
     mode: FoldMode,
@@ -168,7 +165,7 @@ impl<const P: KeccakType, const R: Rate> Drop for KeccakState<P, R> {
 }
 
 impl<const P: KeccakType, const R: Rate> KeccakState<P, R> {
-    pub fn with_initial(delim: Delim, buf: [u8; BYTES(BITS)]) -> Self {
+    pub fn with_initial(delim: Delim, buf: [u8; BYTES]) -> Self {
         KeccakState {
             buf,
             offset: 0,
@@ -178,10 +175,10 @@ impl<const P: KeccakType, const R: Rate> KeccakState<P, R> {
     }
 
     pub fn new(delim: Delim) -> Self {
-        Self::with_initial(delim, [0; BYTES(BITS)])
+        Self::with_initial(delim, [0; BYTES])
     }
 
-    pub fn to_initial(self) -> Option<[u8; BYTES(BITS)]> {
+    pub fn to_initial(self) -> Option<[u8; BYTES]> {
         if self.offset == 0 && matches!(self.mode, Absorbing) {
             Some(self.buf)
         } else {
@@ -229,20 +226,19 @@ impl<const P: KeccakType, const R: Rate> Foldable for KeccakState<P, R> {
     }
 
     fn fill_block(&mut self) {
-        let words: &mut [u64; WORDS(BITS)] = unsafe { core::mem::transmute(&mut self.buf) };
+        let words: &mut [u64; WORDS] = unsafe { core::mem::transmute(&mut self.buf) };
         #[cfg(target_endian = "big")]
         #[inline]
-        fn swap_endianess(words: &mut [u64; WORDS(BITS)]) {
+        fn swap_endianess(words: &mut [u64; WORDS]) {
             for item in words {
                 *item = item.swap_bytes();
             }
         }
         #[cfg(target_endian = "big")]
         swap_endianess(words);
-        if P == KeccakF {
-            keccak::f1600(words);
-        } else {
-            keccak::p1600(words, 12);
+        match P {
+            KeccakType::KeccakF => keccak::f1600(words),
+            KeccakType::KeccakP => keccak::p1600(words, 12),
         }
         #[cfg(target_endian = "big")]
         swap_endianess(words);
@@ -372,10 +368,14 @@ impl<const P: KeccakType, const R: Rate> Reset for KeccakState<P, R> {
         #[cfg(feature = "zeroize-on-drop")]
         self.buf.zeroize();
         #[cfg(not(feature = "zeroize-on-drop"))]
-        let _ = core::mem::replace(&mut self.buf, [0; BYTES(BITS)]);
+        let _ = core::mem::replace(&mut self.buf, [0; BYTES]);
         self.offset = 0;
         self.mode = Absorbing;
     }
 }
 
 // endregion
+
+pub mod out_uninit;
+
+pub mod absorb_seed_unsafe;

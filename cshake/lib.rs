@@ -9,7 +9,7 @@
 #[cfg(feature = "zeroize-on-drop")] use zeroize::Zeroize;
 pub use keccak_state::{self, Absorb, AbsorbZero, Squeeze, SqueezeXor, SqueezeSkip, Reset};
 #[cfg(feature = "seed")] pub use keccak_state::AbsorbSeed;
-use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE, BYTES, BITS, Foldable, IOBuf, Switch, FoldMode, Rate, Delim};
+use keccak_state::{BYTES, KeccakType, Rate, Delim, FoldMode, KeccakState, Foldable, IOBuf, Switch};
 
 // region: encode len
 
@@ -49,10 +49,10 @@ impl<T: Absorb> AbsorbLenRight for T {}
 
 // region: state
 
-const R: Rate = R256;
+const R: Rate = Rate::R256;
 
 pub struct CShake<C: CShakeCustom> {
-    ctx: KeccakState<{ KeccakF }, { R }>,
+    ctx: KeccakState<{ KeccakType::KeccakF }, { R }>,
     custom: C,
 }
 
@@ -73,7 +73,7 @@ impl<C: CShakeCustom> CShake<C> {
         }
     }
 
-    pub fn create_with_initial(custom: C, initial: [u8; BYTES(BITS)]) -> Self {
+    pub fn create_with_initial(custom: C, initial: [u8; BYTES]) -> Self {
         CShake { ctx: KeccakState::with_initial(custom.delim(), initial), custom }
     }
 
@@ -128,10 +128,10 @@ impl<C: CShakeCustom> Reset for CShake<C> {
 // region: custom
 
 pub trait CShakeCustom: Sized {
-    /* const? */ fn rate(&self) -> Rate { R256 }
+    /* const? */ fn rate(&self) -> Rate { Rate::R256 }
     fn name(&self) -> &[u8] { &[] }
     fn custom_string(&self) -> &[u8];
-    fn initial(&self) -> Option<&[u8; BYTES(BITS)]> { None }
+    fn initial(&self) -> Option<&[u8; BYTES]> { None }
 
     /* const */ fn is_empty(&self) -> bool {
         self.name().is_empty() && self.custom_string().is_empty()
@@ -140,7 +140,7 @@ pub trait CShakeCustom: Sized {
     /* const */ fn delim(&self) -> Delim {
         // if there is no name and no customization string
         // cSHAKE is SHAKE
-        if self.is_empty() { DSHAKE } else { DCSHAKE }
+        if self.is_empty() { Delim::SHAKE } else { Delim::CSHAKE }
     }
 
     #[inline]
@@ -195,20 +195,20 @@ macro_rules! cshake_customs {
 }
 
 mod static_custom {
-    use crate::{CShake, CShakeCustom, BYTES, BITS};
+    use crate::{CShake, CShakeCustom, BYTES};
 
     #[derive(Clone)]
     pub struct StaticCustom {
         name: &'static [u8],
         custom_string: &'static [u8],
-        initial: Option<[u8; BYTES(BITS)]>,
+        initial: Option<[u8; BYTES]>,
     }
 
     impl StaticCustom {
         pub const fn new(
             name: &'static [u8],
             custom_string: &'static [u8],
-            initial: Option<[u8; BYTES(BITS)]>,
+            initial: Option<[u8; BYTES]>,
         ) -> Self {
             StaticCustom { name, custom_string, initial }
         }
@@ -234,7 +234,7 @@ mod static_custom {
             self.custom_string
         }
 
-        fn initial(&self) -> Option<&[u8; BYTES(BITS)]> {
+        fn initial(&self) -> Option<&[u8; BYTES]> {
             self.initial.as_ref()
         }
     }
@@ -243,20 +243,20 @@ mod static_custom {
 pub use static_custom::StaticCustom;
 
 mod array_custom {
-    use crate::{CShake, CShakeCustom, BYTES, BITS};
+    use crate::{CShake, CShakeCustom, BYTES};
 
     #[derive(Clone)]
     pub struct ArrayCustom<const L1: usize, const L2: usize> {
         name: [u8; L1],
         custom_string: [u8; L2],
-        initial: Option<[u8; BYTES(BITS)]>,
+        initial: Option<[u8; BYTES]>,
     }
 
     impl<const L1: usize, const L2: usize> ArrayCustom<L1, L2> {
         pub const fn new(
             name: [u8; L1],
             custom_string: [u8; L2],
-            initial: Option<[u8; BYTES(BITS)]>,
+            initial: Option<[u8; BYTES]>,
         ) -> Self {
             ArrayCustom { name, custom_string, initial }
         }
@@ -282,7 +282,7 @@ mod array_custom {
             self.custom_string.as_ref()
         }
 
-        fn initial(&self) -> Option<&[u8; BYTES(BITS)]> {
+        fn initial(&self) -> Option<&[u8; BYTES]> {
             self.initial.as_ref()
         }
     }
@@ -293,20 +293,20 @@ pub use array_custom::ArrayCustom;
 #[cfg(feature = "alloc")]
 mod owned_custom {
     use alloc::sync::Arc;
-    use crate::{CShake, CShakeCustom, BYTES, BITS};
+    use crate::{CShake, CShakeCustom, BYTES};
 
     #[derive(Clone)]
     pub struct OwnedCustom {
         name: Option<Arc<[u8]>>,
         custom_string: Option<Arc<[u8]>>,
-        initial: Option<Arc<[u8; BYTES(BITS)]>>,
+        initial: Option<Arc<[u8; BYTES]>>,
     }
 
     impl OwnedCustom {
         pub fn new(
             name: Option<&[u8]>,
             custom_string: Option<&[u8]>,
-            initial: Option<&[u8; BYTES(BITS)]>,
+            initial: Option<&[u8; BYTES]>,
         ) -> Self {
             OwnedCustom {
                 name: name.map(From::from),
@@ -340,7 +340,7 @@ mod owned_custom {
             self.custom_string.as_deref().unwrap_or(&[])
         }
 
-        fn initial(&self) -> Option<&[u8; BYTES(BITS)]> {
+        fn initial(&self) -> Option<&[u8; BYTES]> {
             self.initial.as_deref()
         }
     }
