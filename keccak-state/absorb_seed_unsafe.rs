@@ -1,3 +1,5 @@
+use super::*;
+
 #[cfg(feature = "seed")]
 pub trait AbsorbSeedUnsafe: Absorb {
     fn absorb_seed_unsafe<const N: usize>(&mut self) {

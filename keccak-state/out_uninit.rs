@@ -41,7 +41,7 @@ impl<const N: usize> IOBuf for OutUninitStack<N> {
 
 pub trait SqueezeInitStack<const N: usize>: Foldable + Switch {
     fn squeeze_to_array(&mut self) -> [u8; N] {
-        self.switch::<Squeezing>();
+        self.switch::<{ Squeezing }>();
         let mut out = OutUninitStack::new();
         self.fold(&mut out);
         unsafe { out.finish() }
@@ -104,7 +104,7 @@ impl IOBuf for OutUninitHeap {
 #[cfg(feature = "alloc")]
 pub trait SqueezeInitHeap<const N: usize>: Foldable + Switch {
     fn squeeze_to_box(&mut self, len: usize) -> Box<[u8]> {
-        self.switch::<Squeezing>();
+        self.switch::<{ Squeezing }>();
         let mut out = OutUninitHeap::new(len);
         self.fold(&mut out);
         unsafe { out.finish() }
