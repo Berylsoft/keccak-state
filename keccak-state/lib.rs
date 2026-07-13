@@ -50,10 +50,18 @@ pub use Rate::*;
 
 impl core::marker::ConstParamTy_ for Rate {}
 
-pub const DKeccak : u8 = 0x01;
-pub const DSHA3   : u8 = 0x06;
-pub const DSHAKE  : u8 = 0x1f;
-pub const DCSHAKE : u8 = 0x04;
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Delim {
+    DKeccak = 0x01,
+    DSHA3   = 0x06,
+    DSHAKE  = 0x1f,
+    DCSHAKE = 0x04,
+}
+
+pub use Delim::*;
+
+impl core::marker::ConstParamTy_ for Delim {}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum FoldMode {
@@ -147,7 +155,7 @@ impl IOBuf for Skip {
 pub struct KeccakState<const P: KeccakType, const R: Rate> {
     buf: [u8; BYTES(BITS)],
     offset: usize,
-    delim: u8,
+    delim: Delim,
     mode: FoldMode,
 }
 
@@ -160,7 +168,7 @@ impl<const P: KeccakType, const R: Rate> Drop for KeccakState<P, R> {
 }
 
 impl<const P: KeccakType, const R: Rate> KeccakState<P, R> {
-    pub fn with_initial(delim: u8, buf: [u8; BYTES(BITS)]) -> Self {
+    pub fn with_initial(delim: Delim, buf: [u8; BYTES(BITS)]) -> Self {
         KeccakState {
             buf,
             offset: 0,
@@ -169,7 +177,7 @@ impl<const P: KeccakType, const R: Rate> KeccakState<P, R> {
         }
     }
 
-    pub fn new(delim: u8) -> Self {
+    pub fn new(delim: Delim) -> Self {
         Self::with_initial(delim, [0; BYTES(BITS)])
     }
 
@@ -182,11 +190,11 @@ impl<const P: KeccakType, const R: Rate> KeccakState<P, R> {
     }
 
     fn pad(&mut self) {
-        self.buf[self.offset] ^= self.delim;
+        self.buf[self.offset] ^= self.delim as u8;
         self.buf[(R as usize) - 1] ^= 0x80;
     }
 
-    pub fn change_delim(self, delim: u8) -> Self {
+    pub fn change_delim(self, delim: Delim) -> Self {
         let KeccakState { buf, offset, mode, delim: _ } = self;
         KeccakState { buf, offset, mode, delim }
     }

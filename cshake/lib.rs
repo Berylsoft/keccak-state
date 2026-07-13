@@ -9,7 +9,7 @@
 #[cfg(feature = "zeroize-on-drop")] use zeroize::Zeroize;
 pub use keccak_state::{self, Absorb, AbsorbZero, Squeeze, SqueezeXor, SqueezeSkip, Reset};
 #[cfg(feature = "seed")] pub use keccak_state::AbsorbSeed;
-use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE, BYTES, BITS, Foldable, IOBuf, Switch, FoldMode, Rate};
+use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE, BYTES, BITS, Foldable, IOBuf, Switch, FoldMode, Rate, Delim};
 
 // region: encode len
 
@@ -137,7 +137,7 @@ pub trait CShakeCustom: Sized {
         self.name().is_empty() && self.custom_string().is_empty()
     }
 
-    /* const */ fn delim(&self) -> u8 {
+    /* const */ fn delim(&self) -> Delim {
         // if there is no name and no customization string
         // cSHAKE is SHAKE
         if self.is_empty() { DSHAKE } else { DCSHAKE }
