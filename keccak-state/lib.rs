@@ -3,6 +3,8 @@
 
 #![no_std]
 
+#![feature(adt_const_params, const_param_ty_trait)]
+
 #[cfg(feature = "alloc")] extern crate alloc;
 #[cfg(feature = "zeroize-on-drop")] use zeroize::Zeroize;
 
@@ -18,8 +20,15 @@ pub const fn BYTES(bits: usize) -> usize {
     bits / 8
 }
 
-pub const KeccakF: bool = true;
-pub const KeccakP: bool = false;
+#[derive(PartialEq, Eq)]
+pub enum KeccakType {
+    KeccakF,
+    KeccakP,
+}
+
+pub use KeccakType::*;
+
+impl core::marker::ConstParamTy_ for KeccakType {}
 
 pub const fn R(bits: usize) -> usize {
     200 - bits / 4
@@ -113,7 +122,7 @@ impl IOBuf for Skip {
 // region: state
 
 #[derive(Clone)]
-pub struct KeccakState<const P: bool, const R: usize> {
+pub struct KeccakState<const P: KeccakType, const R: usize> {
     buf: [u8; BYTES(BITS)],
     offset: usize,
     delim: u8,
@@ -121,14 +130,14 @@ pub struct KeccakState<const P: bool, const R: usize> {
 }
 
 #[cfg(feature = "zeroize-on-drop")]
-impl<const P: bool, const R: usize> Drop for KeccakState<P, R> {
+impl<const P: KeccakType, const R: usize> Drop for KeccakState<P, R> {
     fn drop(&mut self) {
         self.buf.zeroize();
         self.offset = 0;
     }
 }
 
-impl<const P: bool, const R: usize> KeccakState<P, R> {
+impl<const P: KeccakType, const R: usize> KeccakState<P, R> {
     pub fn with_initial(delim: u8, buf: [u8; BYTES(BITS)]) -> Self {
         // TODO complie time
         assert!(R != 0, "rate cannot be equal 0");
@@ -175,7 +184,7 @@ pub trait Switch: Foldable {
     fn switch<const M: bool>(&mut self);
 }
 
-impl<const P: bool, const R: usize> Foldable for KeccakState<P, R> {
+impl<const P: KeccakType, const R: usize> Foldable for KeccakState<P, R> {
     fn fold<B: IOBuf>(&mut self, iobuf: &mut B) {
         let mut iobuf_offset = 0;
         let mut iobuf_rest = iobuf.len();
@@ -213,7 +222,7 @@ impl<const P: bool, const R: usize> Foldable for KeccakState<P, R> {
     }
 }
 
-impl<const P: bool, const R: usize> Switch for KeccakState<P, R> {
+impl<const P: KeccakType, const R: usize> Switch for KeccakState<P, R> {
     #[inline]
     fn switch<const M: bool>(&mut self) {
         if self.mode != M {
@@ -330,7 +339,7 @@ impl<T: Foldable + Switch> SqueezeSkip for T {
     }
 }
 
-impl<const P: bool, const R: usize> Reset for KeccakState<P, R> {
+impl<const P: KeccakType, const R: usize> Reset for KeccakState<P, R> {
     fn reset(&mut self) {
         #[cfg(feature = "zeroize-on-drop")]
         self.buf.zeroize();

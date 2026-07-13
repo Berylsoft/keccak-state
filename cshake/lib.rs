@@ -50,7 +50,7 @@ impl<T: Absorb> AbsorbLenRight for T {}
 const R: usize = R256;
 
 pub struct CShake<C: CShakeCustom> {
-    ctx: KeccakState<KeccakF, R>,
+    ctx: KeccakState<{ KeccakF }, R>,
     custom: C,
 }
 
