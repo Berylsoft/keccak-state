@@ -9,7 +9,7 @@
 #[cfg(feature = "zeroize-on-drop")] use zeroize::Zeroize;
 pub use keccak_state::{self, Absorb, AbsorbZero, Squeeze, SqueezeXor, SqueezeSkip, Reset};
 #[cfg(feature = "seed")] pub use keccak_state::AbsorbSeed;
-use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE, BYTES, BITS, Foldable, IOBuf, Switch, FoldMode};
+use keccak_state::{KeccakState, KeccakF, R256, DCSHAKE, DSHAKE, BYTES, BITS, Foldable, IOBuf, Switch, FoldMode, Rate};
 
 // region: encode len
 
@@ -49,10 +49,10 @@ impl<T: Absorb> AbsorbLenRight for T {}
 
 // region: state
 
-const R: usize = R256;
+const R: Rate = R256;
 
 pub struct CShake<C: CShakeCustom> {
-    ctx: KeccakState<{ KeccakF }, R>,
+    ctx: KeccakState<{ KeccakF }, { R }>,
     custom: C,
 }
 
@@ -64,7 +64,7 @@ impl<C: CShakeCustom> CShake<C> {
 
     fn init(&mut self) {
         if !self.custom.is_empty() {
-            self.ctx.absorb_len_left(R);
+            self.ctx.absorb_len_left(R as usize);
             self.ctx.absorb_len_left(self.custom.name().len() * 8);
             self.ctx.absorb(self.custom.name());
             self.ctx.absorb_len_left(self.custom.custom_string().len() * 8);
@@ -128,7 +128,7 @@ impl<C: CShakeCustom> Reset for CShake<C> {
 // region: custom
 
 pub trait CShakeCustom: Sized {
-    /* const? */ fn rate(&self) -> usize { R256 }
+    /* const? */ fn rate(&self) -> Rate { R256 }
     fn name(&self) -> &[u8] { &[] }
     fn custom_string(&self) -> &[u8];
     fn initial(&self) -> Option<&[u8; BYTES(BITS)]> { None }
