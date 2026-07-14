@@ -4,24 +4,27 @@
 
 #![feature(adt_const_params, const_param_ty_trait)]
 
+#![allow(incomplete_features)]
+#![feature(min_generic_const_args)]
+
 #[cfg(feature = "alloc")] extern crate alloc;
 #[cfg(feature = "zeroize-on-drop")] use zeroize::Zeroize;
 
 // region: consts
 
-pub const BITS: usize = 1600;
+pub type const BITS: usize = 1600;
 
 pub const fn words_from_bits(bits: usize) -> usize {
     bits / 64
 }
 
-pub const WORDS: usize = words_from_bits(BITS);
+pub type const WORDS: usize = const { words_from_bits(BITS) };
 
 pub const fn bytes_from_bits(bits: usize) -> usize {
     bits / 8
 }
 
-pub const BYTES: usize = bytes_from_bits(BITS);
+pub type const BYTES: usize = const { bytes_from_bits(BITS) };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum KeccakType {

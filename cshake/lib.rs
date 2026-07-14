@@ -4,6 +4,9 @@
 
 #![feature(adt_const_params)]
 
+#![allow(incomplete_features)]
+#![feature(min_generic_const_args, associated_type_defaults)]
+
 #[cfg(feature = "alloc")] extern crate alloc;
 #[cfg(feature = "std")] extern crate std;
 #[cfg(feature = "zeroize-on-drop")] use zeroize::Zeroize;
@@ -52,7 +55,7 @@ impl<T: Absorb> AbsorbLenRight for T {}
 const R: Rate = Rate::R256;
 
 pub struct CShake<C: CShakeCustom> {
-    ctx: KeccakState<{ KeccakType::KeccakF }, { R }>,
+    ctx: KeccakState<{ KeccakType::KeccakF }, { C::RATE }>,
     custom: C,
 }
 
@@ -128,7 +131,8 @@ impl<C: CShakeCustom> Reset for CShake<C> {
 // region: custom
 
 pub trait CShakeCustom: Sized {
-    /* const? */ fn rate(&self) -> Rate { Rate::R256 }
+    type const RATE: Rate = Rate::R256;
+
     fn name(&self) -> &[u8] { &[] }
     fn custom_string(&self) -> &[u8];
     fn initial(&self) -> Option<&[u8; BYTES]> { None }
@@ -394,8 +398,8 @@ pub mod rand {
         }
     }
 
-    pub const DEFAULT_RESEED_INTERVAL: usize = 1024 * 64;
-    pub const DEFAULT_SEED_LEN: usize = 32;
+    pub type const DEFAULT_RESEED_INTERVAL: usize = 1024 * 64;
+    pub type const DEFAULT_SEED_LEN: usize = 32;
 
     #[cfg(feature = "std")]
     mod thread {
