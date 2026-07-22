@@ -1,7 +1,7 @@
 [package]
 name = "rand"
 version = "0.8.0" # tungstenite 0.19.0
-edition = "2021"
+edition = "2024"
 authors = ["stackinspector"]
 license = "MPL-2.0"
 repository = "https://github.com/Berylsoft/keccak-state"
