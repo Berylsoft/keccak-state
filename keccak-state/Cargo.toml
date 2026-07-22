@@ -18,3 +18,5 @@ getrandom = { version = "0.3.4", optional = true }
 alloc = []
 zeroize-on-drop = ["zeroize"]
 seed = ["getrandom"]
+out-uninit = []
+absorb-seed-unsafe = ["seed"]

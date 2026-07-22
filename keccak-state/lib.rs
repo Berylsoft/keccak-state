@@ -379,6 +379,8 @@ impl<const P: KeccakType, const R: Rate> Reset for KeccakState<P, R> {
 
 // endregion
 
+#[cfg(feature = "out-uninit")]
 pub mod out_uninit;
 
+#[cfg(feature = "absorb-seed-unsafe")]
 pub mod absorb_seed_unsafe;
