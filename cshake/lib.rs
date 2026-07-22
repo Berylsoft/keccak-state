@@ -428,7 +428,7 @@ pub mod rand {
             // SAFETY: usage should be controlled to avoid aliasing mutable references
             #[inline(always)]
             unsafe fn get_mut(&mut self) -> &mut ThreadRngState {
-                &mut *self.0.get()
+                unsafe { &mut *self.0.get() }
             }
         }
 

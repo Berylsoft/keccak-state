@@ -17,7 +17,7 @@ impl<const N: usize> OutUninitStack<N> {
     unsafe fn finish(self) -> [u8; N] {
         let Self { data } = self;
         // use data.array_assume_init() when stable
-        (data.as_ptr() as *const [u8; N]).read()
+        unsafe { (data.as_ptr() as *const [u8; N]).read() }
     }
 }
 
@@ -78,7 +78,7 @@ impl OutUninitHeap {
 
     unsafe fn finish(self) -> Box<[u8]> {
         let Self { mut ptr } = self;
-        Box::from_raw(ptr.as_mut())
+        unsafe { Box::from_raw(ptr.as_mut()) }
     }
 }
 
