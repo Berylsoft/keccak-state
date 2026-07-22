@@ -5,7 +5,7 @@
 #![feature(adt_const_params)]
 
 #![allow(incomplete_features)]
-#![feature(min_generic_const_args, associated_type_defaults)]
+#![feature(min_generic_const_args, associated_type_defaults, macroless_generic_const_args)]
 
 #[cfg(feature = "alloc")] extern crate alloc;
 #[cfg(feature = "std")] extern crate std;
@@ -81,7 +81,8 @@ impl<C: CShakeCustom> CShake<C> {
     }
 
     pub fn create(custom: C) -> CShake<C> {
-        let mut _self = CShake { ctx: KeccakState::new(custom.delim()), custom };
+        // `::<C>` rust-analyzer bug unsolved
+        let mut _self = CShake::<C> { ctx: KeccakState::new(custom.delim()), custom };
         _self.init();
         _self
     }
@@ -246,6 +247,8 @@ mod static_custom {
 
 pub use static_custom::StaticCustom;
 
+// rust-analyzer bug unsolved
+#[cfg(false)]
 mod array_custom {
     use crate::{CShake, CShakeCustom, BYTES};
 
@@ -292,6 +295,8 @@ mod array_custom {
     }
 }
 
+// rust-analyzer bug unsolved
+#[cfg(false)]
 pub use array_custom::ArrayCustom;
 
 #[cfg(feature = "alloc")]
@@ -398,7 +403,7 @@ pub mod rand {
         }
     }
 
-    pub type const DEFAULT_RESEED_INTERVAL: usize = 1024 * 64;
+    pub type const DEFAULT_RESEED_INTERVAL: usize = const { 1024 * 64 };
     pub type const DEFAULT_SEED_LEN: usize = 32;
 
     #[cfg(feature = "std")]
